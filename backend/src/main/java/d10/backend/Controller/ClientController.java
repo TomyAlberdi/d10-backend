@@ -1,10 +1,18 @@
 package d10.backend.Controller;
 
-import d10.backend.DTO.Client.CreateClientDTO;
-import d10.backend.Service.ClientService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import d10.backend.DTO.Client.CreateClientDTO;
+import d10.backend.Service.ClientService;
 
 @RequiredArgsConstructor
 @RestController
@@ -21,6 +29,17 @@ public class ClientController {
     @PostMapping
     public ResponseEntity<?> save(@RequestBody CreateClientDTO createClientDTO) {
         return ResponseEntity.ok(clientService.createClient(createClientDTO));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> update(@PathVariable String id, @RequestBody CreateClientDTO createClientDTO) {
+        return ResponseEntity.ok(clientService.updateClient(id, createClientDTO));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> delete(@PathVariable String id) {
+        clientService.deleteClient(id);
+        return ResponseEntity.noContent().build();
     }
 
 }

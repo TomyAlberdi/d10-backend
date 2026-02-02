@@ -31,4 +31,16 @@ public class InvoiceService {
         return invoice;
     }
 
+    public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
+        Invoice invoice = findById(id);
+        InvoiceMapper.updateFromDTO(invoice, createInvoiceDTO);
+        invoiceRepository.save(invoice);
+        return invoice;
+    }
+
+    public void deleteInvoice(String id) {
+        findById(id);
+        invoiceRepository.deleteById(id);
+    }
+
 }

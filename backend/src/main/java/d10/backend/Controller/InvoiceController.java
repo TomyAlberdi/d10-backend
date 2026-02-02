@@ -23,4 +23,15 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.createInvoice(createInvoiceDTO));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<?> update(@PathVariable String id, @RequestBody CreateInvoiceDTO createInvoiceDTO) {
+        return ResponseEntity.ok(invoiceService.updateInvoice(id, createInvoiceDTO));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> delete(@PathVariable String id) {
+        invoiceService.deleteInvoice(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

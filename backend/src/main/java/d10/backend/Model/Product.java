@@ -15,36 +15,9 @@ import java.util.List;
 @AllArgsConstructor
 @Document(collection = "products")
 public class Product {
-
     @Id
     private String id;
-
     private String code;
     private String name;
     private String description;
-//    private String quality;
-//    private String mainImage;
-//    private List<String> images;
-//    private Boolean discontinued=false;
-    // Secondary Keys
-//    private String providerId;
-//    private String categoryId;
-//    private String subcategoryId;
-    // Measure Data
-//    private String measureType;
-//    private String measures;
-//    private Double measurePrice;
-//    private String measureCost;
-    // Sale Data
-//    private String saleUnit;
-//    private String saleUnitPrice;
-//    private String saleUnitCost;
-//    private Double measurePerSaleUnit;
-//    private Double profitMargin;
-    // Discount Data
-//    private Integer discountPercentage;
-//    private Double discountedPrice;
-//    private Double discountedMeasurePrice;
-    // Characteristics
-//    private Characteristics characteristics;
 }

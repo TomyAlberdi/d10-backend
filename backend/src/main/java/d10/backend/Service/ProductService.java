@@ -32,7 +32,7 @@ public class ProductService {
     public Product findById(String id) {
         Optional<Product> productSearch = productRepository.findById(id);
         if (productSearch.isEmpty()) {
-            throw new ResourceNotFoundException("Producto con ID " + id + " no encontrado");
+            throw new ResourceNotFoundException("Producto con ID " + id + " no encontrado.");
         }
         Product product = productSearch.get();
         return product;
@@ -42,6 +42,18 @@ public class ProductService {
         Product product = ProductMapper.toEntity(createProductDTO);
         productRepository.save(product);
         return product;
+    }
+
+    public Product updateProduct(String id, CreateProductDTO createProductDTO) {
+        Product product = findById(id);
+        ProductMapper.updateFromDTO(product, createProductDTO);
+        productRepository.save(product);
+        return product;
+    }
+
+    public void deleteProduct(String id) {
+        findById(id);
+        productRepository.deleteById(id);
     }
 
 }
