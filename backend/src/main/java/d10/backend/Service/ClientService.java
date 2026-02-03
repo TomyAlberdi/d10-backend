@@ -1,8 +1,8 @@
 package d10.backend.Service;
 
+import java.util.List;
 import java.util.Optional;
 
-import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.Client.CreateClientDTO;
@@ -10,6 +10,7 @@ import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ClientMapper;
 import d10.backend.Model.Client;
 import d10.backend.Repository.ClientRepository;
+import lombok.AllArgsConstructor;
 
 @Service
 @AllArgsConstructor
@@ -37,6 +38,13 @@ public class ClientService {
         ClientMapper.updateFromDTO(client, createClientDTO);
         clientRepository.save(client);
         return client;
+    }
+
+    public List<Client> searchClients(String q) {
+        if (q == null) {
+            return java.util.Collections.emptyList();
+        }
+        return clientRepository.findByCuitDniContainingIgnoreCaseOrNameContainingIgnoreCase(q, q);
     }
 
     public void deleteClient(String id) {
