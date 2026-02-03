@@ -1,18 +1,20 @@
 package d10.backend.Service;
 
+import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
 import d10.backend.DTO.Provider.CreateProviderDTO;
+import d10.backend.Exception.ExistingAttributeException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProviderMapper;
 import d10.backend.Model.Provider;
 import d10.backend.Repository.ProviderPaginationRepository;
 import d10.backend.Repository.ProviderRepository;
 import lombok.AllArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 @Service
 @AllArgsConstructor
@@ -36,6 +38,10 @@ public class ProviderService {
     }
 
     public Provider createProvider(CreateProviderDTO createProviderDTO) {
+        Optional<Provider> existingProvider = providerRepository.findByName(createProviderDTO.getName());
+        if (existingProvider.isPresent()) {
+            throw new ExistingAttributeException("El nombre del proveedor \"" + createProviderDTO.getName() + "\" ya está en uso.");
+        }
         Provider provider = ProviderMapper.toEntity(createProviderDTO);
         providerRepository.save(provider);
         return provider;
@@ -43,6 +49,12 @@ public class ProviderService {
 
     public Provider updateProvider(String id, CreateProviderDTO createProviderDTO) {
         Provider provider = findById(id);
+        if (!provider.getName().equals(createProviderDTO.getName())) {
+            Optional<Provider> existingProvider = providerRepository.findByName(createProviderDTO.getName());
+            if (existingProvider.isPresent()) {
+                throw new ExistingAttributeException("El nombre del proveedor \"" + createProviderDTO.getName() + "\" ya está en uso.");
+            }
+        }
         ProviderMapper.updateFromDTO(provider, createProviderDTO);
         providerRepository.save(provider);
         return provider;

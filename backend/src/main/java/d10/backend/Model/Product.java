@@ -25,9 +25,16 @@ public class Product {
     private ProductStock stock;
     // Secondary Data
     private String description;
+    private Quality quality;
+    private String providerName;
     private List<ProductCharacteristic> characteristics;
     // Measure Data
 
     // Sale Data
     // Discount Data
+
+    public enum Quality {
+        PRIMERA, SEGUNDA
+    }
+
 }
