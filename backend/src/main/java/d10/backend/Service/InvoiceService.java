@@ -1,14 +1,16 @@
 package d10.backend.Service;
 
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
 import d10.backend.DTO.Invoice.CreateInvoiceDTO;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.InvoiceMapper;
 import d10.backend.Model.Invoice;
 import d10.backend.Repository.InvoiceRepository;
 import lombok.AllArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 @Service
 @AllArgsConstructor
@@ -41,6 +43,13 @@ public class InvoiceService {
     public void deleteInvoice(String id) {
         findById(id);
         invoiceRepository.deleteById(id);
+    }
+
+    public List<Invoice> searchInvoices(String q) {
+        if (q == null) {
+            return java.util.Collections.emptyList();
+        }
+        return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
     }
 
 }
