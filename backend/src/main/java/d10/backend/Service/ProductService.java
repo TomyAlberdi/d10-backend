@@ -2,7 +2,6 @@ package d10.backend.Service;
 
 import java.util.Optional;
 
-import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +14,7 @@ import d10.backend.Mapper.ProductMapper;
 import d10.backend.Model.Product;
 import d10.backend.Repository.ProductPaginationRepository;
 import d10.backend.Repository.ProductRepository;
+import lombok.AllArgsConstructor;
 
 @Service
 @AllArgsConstructor
