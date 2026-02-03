@@ -23,6 +23,7 @@ public class ProductMapper {
         partialProductDTO.setId(product.getId());
         partialProductDTO.setCode(product.getCode());
         partialProductDTO.setName(product.getName());
+        partialProductDTO.setDiscontinued(product.getDiscontinued());
         return partialProductDTO;
     }
 

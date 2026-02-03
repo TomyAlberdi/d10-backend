@@ -56,4 +56,11 @@ public class ProductService {
         productRepository.deleteById(id);
     }
 
+    public Product updateDiscontinued(String id, Boolean discontinued) {
+        Product product = findById(id);
+        product.setDiscontinued(discontinued);
+        productRepository.save(product);
+        return product;
+    }
+
 }

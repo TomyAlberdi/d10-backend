@@ -14,5 +14,6 @@ public class PartialProductDTO {
     private String id;
     private String code;
     private String name;
+    private Boolean discontinued;
 
 }
