@@ -21,6 +21,7 @@ public class ProductMapper {
         product.setCode(createProductDTO.getCode());
         product.setName(createProductDTO.getName());
         product.setDescription(createProductDTO.getDescription());
+        product.setCharacteristics(createProductDTO.getCharacteristics());
     }
 
     public static PartialProductDTO toPartialDTO(Product product) {

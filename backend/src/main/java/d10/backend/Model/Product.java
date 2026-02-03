@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,9 +18,16 @@ import lombok.Setter;
 public class Product {
     @Id
     private String id;
+    // Main Data
     private String code;
     private String name;
-    private String description;
     private Boolean discontinued = false;
     private ProductStock stock;
+    // Secondary Data
+    private String description;
+    private List<ProductCharacteristic> characteristics;
+    // Measure Data
+
+    // Sale Data
+    // Discount Data
 }
