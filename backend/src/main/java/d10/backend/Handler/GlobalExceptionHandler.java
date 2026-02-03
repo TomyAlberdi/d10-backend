@@ -1,11 +1,13 @@
 package d10.backend.Handler;
 
-import d10.backend.Exception.ExistingAttributeException;
-import d10.backend.Exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import d10.backend.Exception.ExistingAttributeException;
+import d10.backend.Exception.InsufficientStockException;
+import d10.backend.Exception.ResourceNotFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -22,6 +24,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ExistingAttributeException.class)
     public ResponseEntity<String> handleExistingAttribute(ExistingAttributeException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<String> handleInsufficientStock(InsufficientStockException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
 

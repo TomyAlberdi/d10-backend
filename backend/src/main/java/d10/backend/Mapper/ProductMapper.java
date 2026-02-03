@@ -3,11 +3,16 @@ package d10.backend.Mapper;
 import d10.backend.DTO.Product.CreateProductDTO;
 import d10.backend.DTO.Product.PartialProductDTO;
 import d10.backend.Model.Product;
+import d10.backend.Model.ProductStock;
+
+import java.util.ArrayList;
 
 public class ProductMapper {
 
     public static Product toEntity(CreateProductDTO dto) {
         Product product = new Product();
+        ProductStock stock = new ProductStock(0,0.0, new ArrayList<>());
+        product.setStock(stock);
         updateFromDTO(product, dto);
         return product;
     }
