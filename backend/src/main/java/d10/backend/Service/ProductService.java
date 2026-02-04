@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Optional;
 
+import d10.backend.Model.Provider;
+import d10.backend.Repository.ProviderRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductPaginationRepository productPaginationRepository;
+    private final ProviderRepository providerRepository;
 
     public Page<PartialProductDTO> getPaginatedProducts(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -44,6 +47,10 @@ public class ProductService {
     }
 
     public Product createProduct(CreateProductDTO createProductDTO) {
+        Optional<Provider> providerSearch = providerRepository.findByName(createProductDTO.getProviderName());
+        if (providerSearch.isEmpty()) {
+            throw new ResourceNotFoundException("Proveedor " + createProductDTO.getProviderName() + " no encontrado.");
+        }
         Product product = ProductMapper.toEntity(createProductDTO);
         productRepository.save(product);
         return product;
@@ -51,6 +58,11 @@ public class ProductService {
 
     public Product updateProduct(String id, CreateProductDTO createProductDTO) {
         Product product = findById(id);
+        Optional<Provider> providerSearch = providerRepository.findByName(createProductDTO.getProviderName());
+        if (providerSearch.isEmpty()) {
+            throw new ResourceNotFoundException("Proveedor " + createProductDTO.getProviderName() + " no encontrado.");
+        }
+        ProductMapper.setCommercialProductFields(product, createProductDTO);
         ProductMapper.updateFromDTO(product, createProductDTO);
         productRepository.save(product);
         return product;
@@ -71,14 +83,12 @@ public class ProductService {
     public Product updateStock(String id, ProductStockRecord stockRecord) {
         Product product = findById(id);
         ProductStock stock = product.getStock();
-
         if (stock == null) {
             stock = new ProductStock();
             stock.setQuantity(0);
             stock.setRecordList(new ArrayList<>());
             product.setStock(stock);
         }
-
         // Update quantity based on record type
         if (stockRecord.getType() == ProductStockRecord.RecordType.IN) {
             stock.setQuantity(stock.getQuantity() + stockRecord.getQuantity());
@@ -88,15 +98,12 @@ public class ProductService {
             }
             stock.setQuantity(stock.getQuantity() - stockRecord.getQuantity());
         }
-
         // Set the date if not provided
         if (stockRecord.getDate() == null) {
             stockRecord.setDate(LocalDate.now());
         }
-
         // Add record to record list
         stock.getRecordList().add(stockRecord);
-
         productRepository.save(product);
         return product;
     }

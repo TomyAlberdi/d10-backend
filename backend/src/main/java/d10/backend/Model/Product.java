@@ -28,13 +28,37 @@ public class Product {
     private Quality quality;
     private String providerName;
     private List<ProductCharacteristic> characteristics;
+    private List<String> images;
+    private String category;
+    private String subcategory;
+    private String dimensions;
     // Measure Data
-
+    private MeasureType measureType;
+    private Double priceByMeasureUnit;
+    //private Double costByMeasure;
     // Sale Data
+    private SaleType saleUnitType;
+    //private Double costBySaleUnit;
+    private Double priceBySaleUnit;
+    private Double measurePerSaleUnit;
+    //private Double profitMargin;
     // Discount Data
+    /*
+    private Integer discount;
+    private Double discountedPriceBySaleUnit;
+    private Double discountedPriceByMeasureUnit;
+     */
 
     public enum Quality {
         PRIMERA, SEGUNDA
+    }
+
+    public enum MeasureType {
+        M2, ML, MM, UNIDAD
+    }
+
+    public enum SaleType {
+        CAJA, JUEGO, UNIDAD
     }
 
 }
