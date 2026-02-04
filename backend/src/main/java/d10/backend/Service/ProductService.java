@@ -86,6 +86,7 @@ public class ProductService {
         if (stock == null) {
             stock = new ProductStock();
             stock.setQuantity(0);
+            stock.setMeasureUnitEquivalent(0.0);
             stock.setRecordList(new ArrayList<>());
             product.setStock(stock);
         }
@@ -97,6 +98,11 @@ public class ProductService {
                 throw new InsufficientStockException("Stock insuficiente. Cantidad disponible: " + stock.getQuantity() + ", cantidad solicitada: " + stockRecord.getQuantity());
             }
             stock.setQuantity(stock.getQuantity() - stockRecord.getQuantity());
+        }
+        // Update measure unit equivalent
+        if (stock.getQuantity() > 0) {
+            Double equivalent = stock.getQuantity() * product.getMeasurePerSaleUnit();
+            stock.setMeasureUnitEquivalent(equivalent);
         }
         // Set the date if not provided
         if (stockRecord.getDate() == null) {
