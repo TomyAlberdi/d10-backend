@@ -31,10 +31,15 @@ public class ProductService {
     private final ProductPaginationRepository productPaginationRepository;
     private final ProviderRepository providerRepository;
 
-    public Page<PartialProductDTO> getPaginatedProducts(int page, int size) {
+    public Page<PartialProductDTO> getPaginatedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return productPaginationRepository.findAll(pageable)
-                .map(ProductMapper::toPartialDTO);
+        if (query != null && !query.trim().isEmpty()) {
+            return productPaginationRepository.findBySearchQuery(query, pageable)
+                    .map(ProductMapper::toPartialDTO);
+        } else {
+            return productPaginationRepository.findAll(pageable)
+                    .map(ProductMapper::toPartialDTO);
+        }
     }
 
     public Product findById(String id) {

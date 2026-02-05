@@ -17,8 +17,6 @@ import d10.backend.Model.ProductStockRecord;
 import d10.backend.Service.ProductService;
 import lombok.RequiredArgsConstructor;
 
-import java.time.LocalDate;
-
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/product")
@@ -28,10 +26,11 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<?> list(
+            @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "30") int size
     ) {
-        return ResponseEntity.ok(productService.getPaginatedProducts(page, size));
+        return ResponseEntity.ok(productService.getPaginatedProducts(query, page, size));
     }
 
     @GetMapping("/{id}")
