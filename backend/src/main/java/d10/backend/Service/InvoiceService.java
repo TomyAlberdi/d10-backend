@@ -9,6 +9,7 @@ import d10.backend.DTO.Invoice.CreateInvoiceDTO;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.InvoiceMapper;
 import d10.backend.Model.Invoice;
+import d10.backend.Model.InvoiceProduct;
 import d10.backend.Repository.InvoiceRepository;
 import lombok.AllArgsConstructor;
 
@@ -17,11 +18,12 @@ import lombok.AllArgsConstructor;
 public class InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
+    private final ProductService productService;
 
     public Invoice findById(String id) {
         Optional<Invoice> invoiceSearch = invoiceRepository.findById(id);
         if (invoiceSearch.isEmpty()) {
-            throw new ResourceNotFoundException("Presupuesto con ID " +  id + " no encontrado.");
+            throw new ResourceNotFoundException("Presupuesto con ID " + id + " no encontrado.");
         }
         Invoice invoice = invoiceSearch.get();
         return invoice;
@@ -29,6 +31,15 @@ public class InvoiceService {
 
     public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
+        if (invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) {
+            for (InvoiceProduct ip : invoice.getProducts()) {
+                productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
+            }
+            for (InvoiceProduct ip : invoice.getProducts()) {
+                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate());
+            }
+            invoice.setStockDecreased(true);
+        }
         invoiceRepository.save(invoice);
         return invoice;
     }
@@ -50,6 +61,25 @@ public class InvoiceService {
             return java.util.Collections.emptyList();
         }
         return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
+    }
+
+    public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus) {
+        Invoice invoice = findById(id);
+        boolean shouldUpdateStock = !invoice.getStockDecreased() &&
+                (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO) &&
+                (newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO);
+        if (shouldUpdateStock) {
+            for (InvoiceProduct ip : invoice.getProducts()) {
+                productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
+            }
+            for (InvoiceProduct ip : invoice.getProducts()) {
+                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate());
+            }
+            invoice.setStockDecreased(true);
+        }
+        invoice.setStatus(newStatus);
+        invoiceRepository.save(invoice);
+        return invoice;
     }
 
 }

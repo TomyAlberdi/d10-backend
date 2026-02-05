@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.Invoice.CreateInvoiceDTO;
+import d10.backend.Model.Invoice;
 import d10.backend.Service.InvoiceService;
 import lombok.RequiredArgsConstructor;
 
@@ -20,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/invoice")
 public class InvoiceController {
 
-    private final InvoiceService  invoiceService;
+    private final InvoiceService invoiceService;
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
@@ -46,6 +47,11 @@ public class InvoiceController {
     @GetMapping("/search")
     public ResponseEntity<?> search(@RequestParam(name = "q", required = true) String q) {
         return ResponseEntity.ok(invoiceService.searchInvoices(q));
+    }
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestParam(name = "status", required = true) Invoice.Status status) {
+        return ResponseEntity.ok(invoiceService.updateInvoiceStatus(id, status));
     }
 
 }

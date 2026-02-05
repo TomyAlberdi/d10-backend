@@ -4,8 +4,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Optional;
 
-import d10.backend.Model.Provider;
-import d10.backend.Repository.ProviderRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,8 +17,10 @@ import d10.backend.Mapper.ProductMapper;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
 import d10.backend.Model.ProductStockRecord;
+import d10.backend.Model.Provider;
 import d10.backend.Repository.ProductPaginationRepository;
 import d10.backend.Repository.ProductRepository;
+import d10.backend.Repository.ProviderRepository;
 import lombok.AllArgsConstructor;
 
 @Service
@@ -78,6 +78,23 @@ public class ProductService {
         product.setDiscontinued(discontinued);
         productRepository.save(product);
         return product;
+    }
+
+    public void checkStockSufficient(String productId, int requiredQuantity) {
+        Product product = findById(productId);
+        ProductStock stock = product.getStock();
+        if (stock == null || stock.getQuantity() < requiredQuantity) {
+            throw new InsufficientStockException("Stock insuficiente para producto " + product.getName() + ". Disponible: " + (stock != null ? stock.getQuantity() : 0) + ", requerido: " + requiredQuantity);
+        }
+    }
+
+    public Product updateStockDecrease(String productId, int quantity, LocalDate date) {
+        Product product = findById(productId);
+        ProductStockRecord stockRecord = new ProductStockRecord();
+        stockRecord.setType(ProductStockRecord.RecordType.OUT);
+        stockRecord.setQuantity(quantity);
+        stockRecord.setDate(date != null ? date : LocalDate.now());
+        return updateStock(productId, stockRecord);
     }
 
     public Product updateStock(String id, ProductStockRecord stockRecord) {

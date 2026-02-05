@@ -17,6 +17,8 @@ import d10.backend.Model.ProductStockRecord;
 import d10.backend.Service.ProductService;
 import lombok.RequiredArgsConstructor;
 
+import java.time.LocalDate;
+
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/product")
@@ -66,5 +68,6 @@ public class ProductController {
             @RequestBody ProductStockRecord stockRecord) {
         return ResponseEntity.ok(productService.updateStock(id, stockRecord));
     }
+
 
 }

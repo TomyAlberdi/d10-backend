@@ -12,12 +12,12 @@ import lombok.Setter;
 public class InvoiceProduct {
     private String id;
     private String name;
-    private Double measurePrice;
+    private Product.MeasureType measureType;
+    private Double priceByMeasureUnit;
     private Double measureUnitQuantity;
+    private Product.SaleType saleUnitType;
+    private Double priceBySaleUnit;
     private Integer saleUnitQuantity;
     private Integer individualDiscount;
     private Double subtotal;
-    private String saleUnit;
-    private String measureUnit;
-    private Double saleUnitPrice;
 }
