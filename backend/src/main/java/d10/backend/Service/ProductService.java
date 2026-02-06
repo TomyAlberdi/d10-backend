@@ -10,7 +10,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.Product.CreateProductDTO;
-import d10.backend.DTO.Product.PartialProductDTO;
 import d10.backend.Exception.InsufficientStockException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProductMapper;
@@ -31,14 +30,12 @@ public class ProductService {
     private final ProductPaginationRepository productPaginationRepository;
     private final ProviderRepository providerRepository;
 
-    public Page<PartialProductDTO> getPaginatedProducts(String query, int page, int size) {
+    public Page<Product> getPaginatedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         if (query != null && !query.trim().isEmpty()) {
-            return productPaginationRepository.findBySearchQuery(query, pageable)
-                    .map(ProductMapper::toPartialDTO);
+            return productPaginationRepository.findBySearchQuery(query, pageable);
         } else {
-            return productPaginationRepository.findAll(pageable)
-                    .map(ProductMapper::toPartialDTO);
+            return productPaginationRepository.findAll(pageable);
         }
     }
 

@@ -54,7 +54,7 @@ public class ProductController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping("/{id}/discontinued")
+    @PatchMapping("/{id}")
     public ResponseEntity<?> updateDiscontinued(
             @PathVariable String id,
             @RequestParam(value = "discontinued") Boolean discontinued) {

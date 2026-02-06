@@ -1,7 +1,6 @@
 package d10.backend.Mapper;
 
 import d10.backend.DTO.Product.CreateProductDTO;
-import d10.backend.DTO.Product.PartialProductDTO;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
 
@@ -40,15 +39,6 @@ public class ProductMapper {
         product.setMeasureType(createProductDTO.getMeasureType());
         // Sale Data
         product.setSaleUnitType(createProductDTO.getSaleUnitType());
-    }
-
-    public static PartialProductDTO toPartialDTO(Product product) {
-        PartialProductDTO partialProductDTO = new PartialProductDTO();
-        partialProductDTO.setId(product.getId());
-        partialProductDTO.setCode(product.getCode());
-        partialProductDTO.setName(product.getName());
-        partialProductDTO.setDiscontinued(product.getDiscontinued());
-        return partialProductDTO;
     }
 
     public static void setCommercialProductFields(Product product, CreateProductDTO dto) {
