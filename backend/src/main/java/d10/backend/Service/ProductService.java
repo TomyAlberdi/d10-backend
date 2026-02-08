@@ -49,10 +49,6 @@ public class ProductService {
     }
 
     public Product createProduct(CreateProductDTO createProductDTO) {
-        Optional<Provider> providerSearch = providerRepository.findByName(createProductDTO.getProviderName());
-        if (providerSearch.isEmpty()) {
-            throw new ResourceNotFoundException("Proveedor " + createProductDTO.getProviderName() + " no encontrado.");
-        }
         Product product = ProductMapper.toEntity(createProductDTO);
         productRepository.save(product);
         return product;
@@ -60,10 +56,6 @@ public class ProductService {
 
     public Product updateProduct(String id, CreateProductDTO createProductDTO) {
         Product product = findById(id);
-        Optional<Provider> providerSearch = providerRepository.findByName(createProductDTO.getProviderName());
-        if (providerSearch.isEmpty()) {
-            throw new ResourceNotFoundException("Proveedor " + createProductDTO.getProviderName() + " no encontrado.");
-        }
         ProductMapper.setCommercialProductFields(product, createProductDTO);
         ProductMapper.updateFromDTO(product, createProductDTO);
         productRepository.save(product);
