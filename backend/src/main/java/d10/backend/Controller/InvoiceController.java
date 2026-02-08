@@ -45,7 +45,7 @@ public class InvoiceController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<?> search(@RequestParam(name = "q", required = true) String q) {
+    public ResponseEntity<?> search(@RequestParam(name = "q", required = false) String q) {
         return ResponseEntity.ok(invoiceService.searchInvoices(q));
     }
 

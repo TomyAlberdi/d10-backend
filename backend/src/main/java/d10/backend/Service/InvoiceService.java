@@ -46,6 +46,18 @@ public class InvoiceService {
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = findById(id);
+        boolean shouldUpdateStock = !invoice.getStockDecreased() &&
+                (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO) &&
+                (createInvoiceDTO.getStatus() == Invoice.Status.PAGO || createInvoiceDTO.getStatus() == Invoice.Status.ENVIADO || createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
+        if (shouldUpdateStock) {
+            for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
+                productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
+            }
+            for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
+                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate());
+            }
+            invoice.setStockDecreased(true);
+        }
         InvoiceMapper.updateFromDTO(invoice, createInvoiceDTO);
         invoiceRepository.save(invoice);
         return invoice;
@@ -58,7 +70,7 @@ public class InvoiceService {
 
     public List<Invoice> searchInvoices(String q) {
         if (q == null) {
-            return java.util.Collections.emptyList();
+            return invoiceRepository.findTop15ByOrderByDateDesc();
         }
         return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
     }
