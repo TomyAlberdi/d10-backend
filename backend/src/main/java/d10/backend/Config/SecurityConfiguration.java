@@ -25,7 +25,7 @@ public class SecurityConfiguration {
         return http.build();
     }
 
-    @Bean
+/*     @Bean
     public CorsFilter corsFilter() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
@@ -35,6 +35,6 @@ public class SecurityConfiguration {
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);
-    }
+    } */
 
 }
