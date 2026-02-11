@@ -30,9 +30,7 @@ public class SecurityConfiguration {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        // When allowCredentials is true, you must NOT use "*" in allowedOrigins.
-        // List explicit origins here instead.
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(List.of("http://localhost:5173","https://www.d10-admin.online"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE","PATCH","OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
         source.registerCorsConfiguration("/**", config);
