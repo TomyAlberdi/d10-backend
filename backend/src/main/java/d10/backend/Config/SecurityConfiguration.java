@@ -25,16 +25,18 @@ public class SecurityConfiguration {
         return http.build();
     }
 
-/*     @Bean
+    @Bean
     public CorsFilter corsFilter() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:5173","http://localhost:3000","*"));
+        // When allowCredentials is true, you must NOT use "*" in allowedOrigins.
+        // List explicit origins here instead.
+        config.setAllowedOrigins(List.of("http://localhost:5173"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE","PATCH","OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
         source.registerCorsConfiguration("/**", config);
         return new CorsFilter(source);
-    } */
+    }
 
 }
