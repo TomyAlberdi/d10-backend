@@ -12,7 +12,7 @@ import d10.backend.Model.Product;
 public interface ProductPaginationRepository extends MongoRepository<Product, String> {
 
     @Override
-    @Query(value = "{}", sort = "{ 'providerName': 1 }")
+    @Query(value = "{}", sort = "{ 'providerName': 1, 'name': 1 }")
     Page<Product> findAll(Pageable pageable);
 
     @Query(
@@ -22,7 +22,7 @@ public interface ProductPaginationRepository extends MongoRepository<Product, St
             + "{ 'description': { $regex: ?0, $options: 'i' } } "
             + "{ 'providerName': { $regex: ?0, $options: 'i' } } "
             + "] }",
-            sort = "{ 'providerName': 1 }"
+            sort = "{ 'providerName': 1, 'name': 1 }"
     )
     Page<Product> findBySearchQuery(String query, Pageable pageable);
 
