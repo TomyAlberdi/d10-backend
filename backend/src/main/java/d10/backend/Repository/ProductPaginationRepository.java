@@ -20,6 +20,7 @@ public interface ProductPaginationRepository extends MongoRepository<Product, St
             + "{ 'name': { $regex: ?0, $options: 'i' } }, "
             + "{ 'code': { $regex: ?0, $options: 'i' } }, "
             + "{ 'description': { $regex: ?0, $options: 'i' } } "
+            + "{ 'providerName': { $regex: ?0, $options: 'i' } } "
             + "] }",
             sort = "{ 'providerName': 1 }"
     )
