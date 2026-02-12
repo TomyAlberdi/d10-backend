@@ -12,9 +12,17 @@ import d10.backend.Model.Product;
 public interface ProductPaginationRepository extends MongoRepository<Product, String> {
 
     @Override
+    @Query(value = "{}", sort = "{ 'providerName': 1 }")
     Page<Product> findAll(Pageable pageable);
 
-    @Query("{ $or: [ { 'name': { $regex: ?0, $options: 'i' } }, { 'code': { $regex: ?0, $options: 'i' } }, { 'description': { $regex: ?0, $options: 'i' } } ] }")
+    @Query(
+            value = "{ $or: [ "
+            + "{ 'name': { $regex: ?0, $options: 'i' } }, "
+            + "{ 'code': { $regex: ?0, $options: 'i' } }, "
+            + "{ 'description': { $regex: ?0, $options: 'i' } } "
+            + "] }",
+            sort = "{ 'providerName': 1 }"
+    )
     Page<Product> findBySearchQuery(String query, Pageable pageable);
 
 }
