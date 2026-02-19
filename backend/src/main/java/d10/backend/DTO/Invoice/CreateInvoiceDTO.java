@@ -20,4 +20,5 @@ public class CreateInvoiceDTO {
     private Invoice.Status status;
     private Double discount;
     private Double total;
+    private Double partialPayment;
 }

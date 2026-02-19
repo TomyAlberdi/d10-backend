@@ -26,6 +26,7 @@ public class Invoice {
     private List<InvoiceProduct> products;
     private Double discount;
     private Double total;
+    private Double paidAmount = 0.0;
     private Boolean stockDecreased = false;
 
     public enum Status {
