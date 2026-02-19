@@ -5,13 +5,10 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
-import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
 import d10.backend.DTO.Invoice.CreateInvoiceDTO;
 import d10.backend.Exception.ExistingAttributeException;
 import d10.backend.Exception.ResourceNotFoundException;
-import d10.backend.Model.Client;
 import d10.backend.Mapper.InvoiceMapper;
-import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
 import d10.backend.Repository.InvoiceRepository;
@@ -23,7 +20,6 @@ public class InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final ProductService productService;
-    private final CashRegisterService cashRegisterService;
 
     public Invoice findById(String id) {
         Optional<Invoice> invoiceSearch = invoiceRepository.findById(id);
@@ -39,7 +35,6 @@ public class InvoiceService {
         double registeredPayment = sanitizePayment(createInvoiceDTO.getPartialPayment());
         validatePayment(registeredPayment, invoice.getTotal());
         invoice.setPaidAmount(registeredPayment);
-        registerPartialPayment(createInvoiceDTO.getClient(), registeredPayment, createInvoiceDTO.getStatus());
         if (invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
@@ -59,10 +54,9 @@ public class InvoiceService {
         double registeredPayment = sanitizePayment(createInvoiceDTO.getPartialPayment());
         double updatedPaidAmount = currentPaidAmount + registeredPayment;
         validatePayment(updatedPaidAmount, createInvoiceDTO.getTotal());
-        registerPartialPayment(createInvoiceDTO.getClient(), registeredPayment, createInvoiceDTO.getStatus());
-        boolean shouldUpdateStock = !invoice.getStockDecreased() &&
-                (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO) &&
-                (createInvoiceDTO.getStatus() == Invoice.Status.PAGO || createInvoiceDTO.getStatus() == Invoice.Status.ENVIADO || createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
+        boolean shouldUpdateStock = !invoice.getStockDecreased()
+                && (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO)
+                && (createInvoiceDTO.getStatus() == Invoice.Status.PAGO || createInvoiceDTO.getStatus() == Invoice.Status.ENVIADO || createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
         if (shouldUpdateStock) {
             for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
@@ -94,22 +88,6 @@ public class InvoiceService {
         }
     }
 
-    private void registerPartialPayment(Client client, double paymentAmount, Invoice.Status status) {
-        if (paymentAmount <= 0) {
-            return;
-        }
-        String clientName = (client != null && client.getName() != null) ? client.getName() : "SIN CLIENTE";
-        String description = status == Invoice.Status.PAGO
-                ? "PAGO TOTAL - " + clientName
-                : "PAGO PARCIAL /" + clientName + "/";
-        CreateCashRegisterTransactionDTO transaction = new CreateCashRegisterTransactionDTO(
-                paymentAmount,
-                CashRegisterTransaction.TransactionType.IN,
-                description
-        );
-        cashRegisterService.createTransaction(transaction);
-    }
-
     public void deleteInvoice(String id) {
         findById(id);
         invoiceRepository.deleteById(id);
@@ -125,9 +103,9 @@ public class InvoiceService {
     public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus) {
         Invoice invoice = findById(id);
         validatePayment(sanitizePayment(invoice.getPaidAmount()), invoice.getTotal());
-        boolean shouldUpdateStock = !invoice.getStockDecreased() &&
-                (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO) &&
-                (newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO);
+        boolean shouldUpdateStock = !invoice.getStockDecreased()
+                && (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO)
+                && (newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO);
         if (shouldUpdateStock) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
