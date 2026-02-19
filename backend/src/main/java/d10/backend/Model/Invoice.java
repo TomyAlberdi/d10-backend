@@ -1,14 +1,15 @@
 package d10.backend.Model;
 
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-
-import java.time.LocalDate;
-import java.util.List;
 
 @Getter
 @Setter
@@ -26,7 +27,7 @@ public class Invoice {
     private List<InvoiceProduct> products;
     private Double discount;
     private Double total;
-    private Double paidAmount = 0.0;
+    private Double partialPayment = 0.0;
     private Boolean stockDecreased = false;
 
     public enum Status {

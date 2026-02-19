@@ -1,9 +1,9 @@
 package d10.backend.Mapper;
 
+import java.time.LocalDate;
+
 import d10.backend.DTO.Invoice.CreateInvoiceDTO;
 import d10.backend.Model.Invoice;
-
-import java.time.LocalDate;
 
 public class InvoiceMapper {
 
@@ -19,6 +19,7 @@ public class InvoiceMapper {
         invoice.setProducts(createInvoiceDTO.getProducts());
         invoice.setStatus(createInvoiceDTO.getStatus());
         invoice.setDiscount(createInvoiceDTO.getDiscount());
+        invoice.setPartialPayment(createInvoiceDTO.getPartialPayment());
         invoice.setTotal(createInvoiceDTO.getTotal());
     }
 
