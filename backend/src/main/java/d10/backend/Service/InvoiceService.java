@@ -5,10 +5,13 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
 import d10.backend.DTO.Invoice.CreateInvoiceDTO;
 import d10.backend.Exception.ExistingAttributeException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.InvoiceMapper;
+import d10.backend.Model.CashRegister;
+import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
 import d10.backend.Repository.InvoiceRepository;
@@ -20,6 +23,7 @@ public class InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
     private final ProductService productService;
+    private final CashRegisterService cashRegisterService;
 
     private String generateNextInvoiceNumber() {
         Optional<Invoice> lastInvoice = invoiceRepository.findTopByOrderByInvoiceNumberDesc();
@@ -56,6 +60,9 @@ public class InvoiceService {
             invoice.setStockDecreased(true);
         }
         invoiceRepository.save(invoice);
+        if (invoice.getStatus() == Invoice.Status.PAGO && invoice.getPaymentMethod() != null) {
+            addPaymentToCashRegister(invoice);
+        }
         return invoice;
     }
 
@@ -122,7 +129,20 @@ public class InvoiceService {
         }
         invoice.setStatus(newStatus);
         invoiceRepository.save(invoice);
+        if (newStatus == Invoice.Status.PAGO && invoice.getPaymentMethod() != null) {
+            addPaymentToCashRegister(invoice);
+        }
         return invoice;
+    }
+
+    private void addPaymentToCashRegister(Invoice invoice) {
+        CashRegister.CashRegisterType registerType = invoice.getPaymentMethod() == Invoice.PaymentMethod.CASH ? CashRegister.CashRegisterType.PAPER : CashRegister.CashRegisterType.DIGITAL;
+        CreateCashRegisterTransactionDTO dto = new CreateCashRegisterTransactionDTO();
+        dto.setAmount(invoice.getTotal());
+        dto.setType(CashRegisterTransaction.TransactionType.IN);
+        dto.setDescription("Pago de factura " + invoice.getInvoiceNumber());
+        dto.setRegisterType(registerType);
+        cashRegisterService.createTransaction(dto);
     }
 
 }

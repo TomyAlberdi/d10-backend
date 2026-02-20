@@ -1,10 +1,8 @@
 package d10.backend.Controller;
 
-import d10.backend.DTO.CashRegister.CashRegisterDTO;
-import d10.backend.DTO.CashRegister.CashRegisterTransactionDTO;
-import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
-import d10.backend.Service.CashRegisterService;
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDate;
+import java.util.List;
+
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,8 +15,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
-import java.util.List;
+import d10.backend.DTO.CashRegister.CashRegisterDTO;
+import d10.backend.DTO.CashRegister.CashRegisterTransactionDTO;
+import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
+import d10.backend.Model.CashRegister;
+import d10.backend.Service.CashRegisterService;
+import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 @RestController
@@ -28,8 +30,8 @@ public class CashRegisterController {
     private final CashRegisterService cashRegisterService;
 
     @GetMapping
-    public ResponseEntity<CashRegisterDTO> getCurrentAmount() {
-        return ResponseEntity.ok(cashRegisterService.getCurrentAmount());
+    public ResponseEntity<CashRegisterDTO> getCurrentAmount(@RequestParam("type") CashRegister.CashRegisterType type) {
+        return ResponseEntity.ok(cashRegisterService.getCurrentAmount(type));
     }
 
     @PostMapping("/transactions")
@@ -53,8 +55,9 @@ public class CashRegisterController {
 
     @GetMapping("/transactions")
     public ResponseEntity<List<CashRegisterTransactionDTO>> listTransactionsByDate(
-            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ResponseEntity.ok(cashRegisterService.listTransactionsByDate(date));
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "type", required = false) CashRegister.CashRegisterType type) {
+        return ResponseEntity.ok(cashRegisterService.listTransactionsByDate(date, type));
     }
 
 }

@@ -14,12 +14,19 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "cash_register")
 public class CashRegister {
 
-    public static final String CASH_REGISTER_ID = "CASH_REGISTER";
+    public static final String PAPER_CASH_REGISTER_ID = "PAPER_CASH_REGISTER";
+    public static final String DIGITAL_CASH_REGISTER_ID = "DIGITAL_CASH_REGISTER";
 
     @Id
-    private String id = CASH_REGISTER_ID;
+    private String id;
 
     private Double currentAmount = 0.0;
+
+    private CashRegisterType type;
+
+    public enum CashRegisterType {
+        PAPER, DIGITAL
+    }
 
 }
 

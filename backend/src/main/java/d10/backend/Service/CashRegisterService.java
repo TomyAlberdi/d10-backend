@@ -1,5 +1,14 @@
 package d10.backend.Service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import d10.backend.DTO.CashRegister.CashRegisterDTO;
 import d10.backend.DTO.CashRegister.CashRegisterTransactionDTO;
 import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
@@ -10,14 +19,6 @@ import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Repository.CashRegisterRepository;
 import d10.backend.Repository.CashRegisterTransactionRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,22 +27,23 @@ public class CashRegisterService {
     private final CashRegisterRepository cashRegisterRepository;
     private final CashRegisterTransactionRepository transactionRepository;
 
-    private CashRegister getOrCreateRegister() {
-        Optional<CashRegister> existing = cashRegisterRepository.findById(CashRegister.CASH_REGISTER_ID);
+    private CashRegister getOrCreateRegister(CashRegister.CashRegisterType type) {
+        String id = type == CashRegister.CashRegisterType.PAPER ? CashRegister.PAPER_CASH_REGISTER_ID : CashRegister.DIGITAL_CASH_REGISTER_ID;
+        Optional<CashRegister> existing = cashRegisterRepository.findById(id);
         if (existing.isPresent()) {
             return existing.get();
         }
-        CashRegister cashRegister = new CashRegister(CashRegister.CASH_REGISTER_ID, 0.0);
+        CashRegister cashRegister = new CashRegister(id, 0.0, type);
         return cashRegisterRepository.save(cashRegister);
     }
 
-    public CashRegisterDTO getCurrentAmount() {
-        return CashRegisterMapper.toDTO(getOrCreateRegister());
+    public CashRegisterDTO getCurrentAmount(CashRegister.CashRegisterType type) {
+        return CashRegisterMapper.toDTO(getOrCreateRegister(type));
     }
 
     public CashRegisterTransactionDTO createTransaction(CreateCashRegisterTransactionDTO dto) {
         validateAmount(dto.getAmount());
-        CashRegister register = getOrCreateRegister();
+        CashRegister register = getOrCreateRegister(dto.getRegisterType());
 
         double signedAmount = getSignedAmount(dto.getAmount(), dto.getType());
         register.setCurrentAmount(register.getCurrentAmount() + signedAmount);
@@ -57,7 +59,7 @@ public class CashRegisterService {
         CashRegisterTransaction existing = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transacción de caja con ID " + id + " no encontrada."));
 
-        CashRegister register = getOrCreateRegister();
+        CashRegister register = getOrCreateRegister(dto.getRegisterType());
 
         double oldSigned = getSignedAmount(existing.getAmount(), existing.getType());
         double newSigned = getSignedAmount(dto.getAmount(), dto.getType());
@@ -75,7 +77,7 @@ public class CashRegisterService {
         CashRegisterTransaction existing = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transacción de caja con ID " + id + " no encontrada."));
 
-        CashRegister register = getOrCreateRegister();
+        CashRegister register = getOrCreateRegister(existing.getRegisterType());
         double oldSigned = getSignedAmount(existing.getAmount(), existing.getType());
         register.setCurrentAmount(register.getCurrentAmount() - oldSigned);
         cashRegisterRepository.save(register);
@@ -83,11 +85,17 @@ public class CashRegisterService {
         transactionRepository.deleteById(id);
     }
 
-    public List<CashRegisterTransactionDTO> listTransactionsByDate(LocalDate date) {
+    public List<CashRegisterTransactionDTO> listTransactionsByDate(LocalDate date, CashRegister.CashRegisterType type) {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = LocalDateTime.of(date, LocalTime.MAX);
-        List<CashRegisterTransaction> transactions = transactionRepository
-                .findByDateTimeBetweenOrderByDateTimeAsc(start, end);
+        List<CashRegisterTransaction> transactions;
+        if (type != null) {
+            transactions = transactionRepository
+                    .findByDateTimeBetweenAndRegisterTypeOrderByDateTimeAsc(start, end, type);
+        } else {
+            transactions = transactionRepository
+                    .findByDateTimeBetweenOrderByDateTimeAsc(start, end);
+        }
         return transactions.stream()
                 .map(CashRegisterMapper::toDTO)
                 .collect(Collectors.toList());

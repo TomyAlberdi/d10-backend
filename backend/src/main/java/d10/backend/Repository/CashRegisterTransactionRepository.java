@@ -1,5 +1,6 @@
 package d10.backend.Repository;
 
+import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
@@ -11,6 +12,8 @@ import java.util.List;
 public interface CashRegisterTransactionRepository extends MongoRepository<CashRegisterTransaction, String> {
 
     List<CashRegisterTransaction> findByDateTimeBetweenOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end);
+
+    List<CashRegisterTransaction> findByDateTimeBetweenAndRegisterTypeOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end, CashRegister.CashRegisterType registerType);
 
 }
 

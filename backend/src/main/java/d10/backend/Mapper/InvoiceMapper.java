@@ -21,6 +21,7 @@ public class InvoiceMapper {
         invoice.setDiscount(createInvoiceDTO.getDiscount());
         invoice.setPartialPayment(createInvoiceDTO.getPartialPayment());
         invoice.setTotal(createInvoiceDTO.getTotal());
+        invoice.setPaymentMethod(createInvoiceDTO.getPaymentMethod());
     }
 
 }

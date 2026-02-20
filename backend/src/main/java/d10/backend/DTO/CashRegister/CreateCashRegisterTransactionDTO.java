@@ -1,5 +1,6 @@
 package d10.backend.DTO.CashRegister;
 
+import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -17,6 +18,8 @@ public class CreateCashRegisterTransactionDTO {
     private CashRegisterTransaction.TransactionType type;
 
     private String description;
+
+    private CashRegister.CashRegisterType registerType;
 
 }
 

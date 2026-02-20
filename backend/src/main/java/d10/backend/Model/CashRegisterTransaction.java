@@ -27,6 +27,8 @@ public class CashRegisterTransaction {
 
     private LocalDateTime dateTime;
 
+    private CashRegister.CashRegisterType registerType;
+
     public enum TransactionType {
         IN, OUT
     }

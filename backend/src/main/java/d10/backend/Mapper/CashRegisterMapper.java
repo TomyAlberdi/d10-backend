@@ -16,9 +16,9 @@ public class CashRegisterMapper {
 
     public static CashRegisterDTO toDTO(CashRegister cashRegister) {
         if (cashRegister == null) {
-            return new CashRegisterDTO(0.0);
+            return new CashRegisterDTO(0.0, null);
         }
-        return new CashRegisterDTO(cashRegister.getCurrentAmount());
+        return new CashRegisterDTO(cashRegister.getCurrentAmount(), cashRegister.getType());
     }
 
     public static CashRegisterTransaction toEntity(CreateCashRegisterTransactionDTO dto) {
@@ -27,6 +27,7 @@ public class CashRegisterMapper {
         transaction.setType(dto.getType());
         transaction.setDescription(dto.getDescription());
         transaction.setDateTime(LocalDateTime.now());
+        transaction.setRegisterType(dto.getRegisterType());
         return transaction;
     }
 
@@ -34,6 +35,7 @@ public class CashRegisterMapper {
         transaction.setAmount(dto.getAmount());
         transaction.setType(dto.getType());
         transaction.setDescription(dto.getDescription());
+        transaction.setRegisterType(dto.getRegisterType());
     }
 
     public static CashRegisterTransactionDTO toDTO(CashRegisterTransaction transaction) {
@@ -45,7 +47,8 @@ public class CashRegisterMapper {
                 transaction.getAmount(),
                 transaction.getType(),
                 transaction.getDescription(),
-                transaction.getDateTime()
+                transaction.getDateTime(),
+                transaction.getRegisterType()
         );
     }
 

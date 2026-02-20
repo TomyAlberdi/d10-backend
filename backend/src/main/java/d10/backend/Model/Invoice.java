@@ -30,9 +30,14 @@ public class Invoice {
     private Double partialPayment = 0.0;
     private Boolean stockDecreased = false;
     private String invoiceNumber;
+    private PaymentMethod paymentMethod;
 
     public enum Status {
         PENDIENTE, PAGO, ENVIADO, ENTREGADO, CANCELADO
+    }
+
+    public enum PaymentMethod {
+        CASH, DIGITAL
     }
 
 }

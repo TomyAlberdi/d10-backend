@@ -21,4 +21,5 @@ public class CreateInvoiceDTO {
     private Double discount;
     private Double total;
     private Double partialPayment;
+    private Invoice.PaymentMethod paymentMethod;
 }
