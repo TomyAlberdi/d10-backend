@@ -29,6 +29,7 @@ public class Invoice {
     private Double total;
     private Double partialPayment = 0.0;
     private Boolean stockDecreased = false;
+    private String invoiceNumber;
 
     public enum Status {
         PENDIENTE, PAGO, ENVIADO, ENTREGADO, CANCELADO

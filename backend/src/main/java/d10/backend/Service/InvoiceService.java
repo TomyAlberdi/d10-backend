@@ -21,6 +21,19 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final ProductService productService;
 
+    private String generateNextInvoiceNumber() {
+        Optional<Invoice> lastInvoice = invoiceRepository.findTopByOrderByInvoiceNumberDesc();
+        int nextNum = 1;
+        if (lastInvoice.isPresent() && lastInvoice.get().getInvoiceNumber() != null) {
+            try {
+                nextNum = Integer.parseInt(lastInvoice.get().getInvoiceNumber()) + 1;
+            } catch (NumberFormatException e) {
+                // if not a number, start from 1
+            }
+        }
+        return String.format("%06d", nextNum);
+    }
+
     public Invoice findById(String id) {
         Optional<Invoice> invoiceSearch = invoiceRepository.findById(id);
         if (invoiceSearch.isEmpty()) {
@@ -32,6 +45,7 @@ public class InvoiceService {
 
     public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
+        invoice.setInvoiceNumber(generateNextInvoiceNumber());
         if (invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
