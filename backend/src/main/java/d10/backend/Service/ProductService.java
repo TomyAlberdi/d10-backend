@@ -2,6 +2,7 @@ package d10.backend.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -16,7 +17,6 @@ import d10.backend.Mapper.ProductMapper;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
 import d10.backend.Model.ProductStockRecord;
-import d10.backend.Model.Provider;
 import d10.backend.Repository.ProductPaginationRepository;
 import d10.backend.Repository.ProductRepository;
 import d10.backend.Repository.ProviderRepository;
@@ -37,6 +37,10 @@ public class ProductService {
         } else {
             return productPaginationRepository.findAll(pageable);
         }
+    }
+
+    public List<Product> getProductsWithStockGreaterThanZero() {
+        return productRepository.findByStockQuantityGreaterThan(0);
     }
 
     public Product findById(String id) {

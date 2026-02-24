@@ -59,9 +59,9 @@ public class InvoiceService {
             invoice.setStockDecreased(true);
         }
         invoiceRepository.save(invoice);
-        if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
+/*         if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
-        }
+        } */
         return invoice;
     }
 
@@ -79,12 +79,12 @@ public class InvoiceService {
             }
             invoice.setStockDecreased(true);
         }
-        Invoice.Status newStatus = createInvoiceDTO.getStatus();
+/*         Invoice.Status newStatus = createInvoiceDTO.getStatus();
         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
         boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
         if ((isSetToPaid && !isAlreayPaid) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
-        }
+        } */
         InvoiceMapper.updateFromDTO(invoice, createInvoiceDTO);
         invoiceRepository.save(invoice);
         return invoice;
@@ -118,11 +118,11 @@ public class InvoiceService {
         }
         invoice.setStatus(newStatus);
         invoiceRepository.save(invoice);
-        boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
+/*         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
         boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
         if ((isSetToPaid && !isAlreayPaid) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
-        }
+        } */
         return invoice;
     }
 

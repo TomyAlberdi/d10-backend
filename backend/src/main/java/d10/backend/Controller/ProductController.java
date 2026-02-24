@@ -38,6 +38,11 @@ public class ProductController {
         return ResponseEntity.ok(productService.findById(id));
     }
 
+    @GetMapping("/stock/list")
+    public ResponseEntity<?> getProductsWithStock() {
+        return ResponseEntity.ok(productService.getProductsWithStockGreaterThanZero());
+    }
+
     @PostMapping
     public ResponseEntity<?> save(@RequestBody CreateProductDTO product) {
         return ResponseEntity.ok(productService.createProduct(product));
