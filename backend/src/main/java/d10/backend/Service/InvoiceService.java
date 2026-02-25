@@ -102,6 +102,21 @@ public class InvoiceService {
         return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
     }
 
+    public List<Invoice> searchInvoices(String q, Invoice.Status status) {
+        if (q == null || q.trim().isEmpty()) {
+            if (status == null) {
+                return invoiceRepository.findTop15ByOrderByDateDesc();
+            } else {
+                return invoiceRepository.findTop15ByStatusOrderByDateDesc(status);
+            }
+        }
+        if (status == null) {
+            return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
+        } else {
+            return invoiceRepository.findByStatusAndClientCuitDniContainingIgnoreCaseOrStatusAndClientNameContainingIgnoreCase(status, q, status, q);
+        }
+    }
+
     public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus) {
         Invoice invoice = findById(id);
         boolean shouldUpdateStock = !invoice.getStockDecreased()

@@ -1,5 +1,6 @@
 package d10.backend.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -10,10 +11,14 @@ import d10.backend.Model.Invoice;
 @Repository
 public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 
-	java.util.List<Invoice> findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(String cuitDni, String name);
+	List<Invoice> findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(String cuitDni, String name);
 
-	java.util.List<Invoice> findTop15ByOrderByDateDesc();
+	List<Invoice> findTop15ByOrderByDateDesc();
 
 	Optional<Invoice> findTopByOrderByInvoiceNumberDesc();
+
+	List<Invoice> findTop15ByStatusOrderByDateDesc(Invoice.Status status);
+
+	List<Invoice> findByStatusAndClientCuitDniContainingIgnoreCaseOrStatusAndClientNameContainingIgnoreCase(Invoice.Status status, String cuitDni, Invoice.Status status2, String name);
 
 }
