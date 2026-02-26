@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.CashRegister.CashRegisterDTO;
+import d10.backend.DTO.CashRegister.CashRegisterDailyTotalsDTO;
 import d10.backend.DTO.CashRegister.CashRegisterTransactionDTO;
 import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
 import d10.backend.Model.CashRegister;
@@ -58,6 +59,16 @@ public class CashRegisterController {
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(value = "type", required = false) CashRegister.CashRegisterType type) {
         return ResponseEntity.ok(cashRegisterService.listTransactionsByDate(date, type));
+    }
+
+    /**
+     * Returns the aggregated IN/OUT totals for a given day (and optional register type).
+     */
+    @GetMapping("/transactions/summary")
+    public ResponseEntity<CashRegisterDailyTotalsDTO> getDailyTotals(
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "type", required = false) CashRegister.CashRegisterType type) {
+        return ResponseEntity.ok(cashRegisterService.getDailyTotals(date, type));
     }
 
 }

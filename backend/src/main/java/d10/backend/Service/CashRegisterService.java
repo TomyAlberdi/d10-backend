@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.CashRegister.CashRegisterDTO;
+import d10.backend.DTO.CashRegister.CashRegisterDailyTotalsDTO;
 import d10.backend.DTO.CashRegister.CashRegisterTransactionDTO;
 import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
 import d10.backend.Exception.ResourceNotFoundException;
@@ -99,6 +100,24 @@ public class CashRegisterService {
         return transactions.stream()
                 .map(CashRegisterMapper::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Calculate aggregated totals for the given date (and optional type filter).
+     */
+    public CashRegisterDailyTotalsDTO getDailyTotals(LocalDate date, CashRegister.CashRegisterType type) {
+        // reuse list logic to avoid duplication
+        List<CashRegisterTransactionDTO> list = listTransactionsByDate(date, type);
+        double inTotal = 0.0;
+        double outTotal = 0.0;
+        for (CashRegisterTransactionDTO t : list) {
+            if (t.getType() == CashRegisterTransaction.TransactionType.IN) {
+                inTotal += t.getAmount() != null ? t.getAmount() : 0;
+            } else if (t.getType() == CashRegisterTransaction.TransactionType.OUT) {
+                outTotal += t.getAmount() != null ? t.getAmount() : 0;
+            }
+        }
+        return new CashRegisterDailyTotalsDTO(inTotal, outTotal);
     }
 
     private void validateAmount(Double amount) {
