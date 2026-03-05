@@ -10,8 +10,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CellItem {
-    /** product id stored in this cell */
-    private String productId;
+    /** product stored in this cell */
+    private Product product;
     /** quantity of sale units for that product */
     private Integer quantity;
 }

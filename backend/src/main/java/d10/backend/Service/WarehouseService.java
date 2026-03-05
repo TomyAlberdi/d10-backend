@@ -8,9 +8,12 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.WarehouseCellDTO;
+import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Model.CellItem;
+import d10.backend.Model.Product;
 import d10.backend.Model.Warehouse;
 import d10.backend.Model.WarehouseCell;
+import d10.backend.Repository.ProductRepository;
 import d10.backend.Repository.WarehouseRepository;
 import lombok.AllArgsConstructor;
 
@@ -19,6 +22,7 @@ import lombok.AllArgsConstructor;
 public class WarehouseService {
 
     private final WarehouseRepository warehouseRepository;
+    private final ProductRepository productRepository;
 
     // constant for the singleton ID
     private static final String WAREHOUSE_ID = "main";
@@ -55,9 +59,9 @@ public class WarehouseService {
      */
     public WarehouseCell updateCell(WarehouseCellDTO dto) {
         // sanity check on coordinates
-        if (dto.getRow() < 0 || dto.getRow() >= ROWS ||
-            dto.getColumn() < 0 || dto.getColumn() >= COLUMNS ||
-            dto.getLevel() < 0 || dto.getLevel() >= LEVELS) {
+        if (dto.getRow() < 0 || dto.getRow() >= ROWS
+                || dto.getColumn() < 0 || dto.getColumn() >= COLUMNS
+                || dto.getLevel() < 0 || dto.getLevel() >= LEVELS) {
             throw new IllegalArgumentException("Cell coordinates out of bounds");
         }
 
@@ -67,8 +71,8 @@ public class WarehouseService {
         // find existing cell with same coordinates
         Optional<WarehouseCell> existingOpt = wh.getCells().stream()
                 .filter(c -> c.getRow() == cell.getRow()
-                        && c.getColumn() == cell.getColumn()
-                        && c.getLevel() == cell.getLevel())
+                && c.getColumn() == cell.getColumn()
+                && c.getLevel() == cell.getLevel())
                 .findFirst();
         if (existingOpt.isPresent()) {
             WarehouseCell existing = existingOpt.get();
@@ -87,7 +91,11 @@ public class WarehouseService {
         cell.setLevel(dto.getLevel());
         List<CellItem> items = new ArrayList<>();
         for (WarehouseCellDTO.WarehouseCellItemDTO item : dto.getItems()) {
-            items.add(new CellItem(item.getProductId(), item.getQuantity()));
+            Optional<Product> product = productRepository.findById(item.getProductId());
+            if (!product.isPresent()) {
+                throw new ResourceNotFoundException("Product not found");
+            }
+            items.add(new CellItem(product.get(), item.getQuantity()));
         }
         cell.setItems(items);
         return cell;
@@ -95,9 +103,9 @@ public class WarehouseService {
 
     /**
      * make sure the warehouse has an entry for every possible coordinate. The
-     * rules say we want cells even if they are empty, so this method will append
-     * blank cells if missing.  It does not remove extra cells, but coordinates
-     * outside the allowed range are ignored later by the API.
+     * rules say we want cells even if they are empty, so this method will
+     * append blank cells if missing. It does not remove extra cells, but
+     * coordinates outside the allowed range are ignored later by the API.
      */
     private void fillMissingCells(Warehouse wh) {
         List<WarehouseCell> cells = wh.getCells();
@@ -108,8 +116,8 @@ public class WarehouseService {
                     final int rr = r;
                     final int cc = c;
                     final int ll = l;
-                    boolean present = cells.stream().anyMatch(cell ->
-                            cell.getRow() == rr && cell.getColumn() == cc && cell.getLevel() == ll);
+                    boolean present = cells.stream().anyMatch(cell
+                            -> cell.getRow() == rr && cell.getColumn() == cc && cell.getLevel() == ll);
                     if (!present) {
                         WarehouseCell empty = new WarehouseCell(rr, cc, ll, new ArrayList<>());
                         cells.add(empty);
