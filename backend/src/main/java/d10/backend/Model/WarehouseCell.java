@@ -15,6 +15,5 @@ import lombok.Setter;
 public class WarehouseCell {
     private int row;
     private int column;
-    private int level;
     private List<CellItem> items = new ArrayList<>();
 }

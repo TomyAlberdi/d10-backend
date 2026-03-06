@@ -60,8 +60,7 @@ public class WarehouseService {
     public WarehouseCell updateCell(WarehouseCellDTO dto) {
         // sanity check on coordinates
         if (dto.getRow() < 0 || dto.getRow() >= ROWS
-                || dto.getColumn() < 0 || dto.getColumn() >= COLUMNS
-                || dto.getLevel() < 0 || dto.getLevel() >= LEVELS) {
+                || dto.getColumn() < 0 || dto.getColumn() >= COLUMNS) {
             throw new IllegalArgumentException("Cell coordinates out of bounds");
         }
 
@@ -71,8 +70,7 @@ public class WarehouseService {
         // find existing cell with same coordinates
         Optional<WarehouseCell> existingOpt = wh.getCells().stream()
                 .filter(c -> c.getRow() == cell.getRow()
-                && c.getColumn() == cell.getColumn()
-                && c.getLevel() == cell.getLevel())
+                && c.getColumn() == cell.getColumn())
                 .findFirst();
         if (existingOpt.isPresent()) {
             WarehouseCell existing = existingOpt.get();
@@ -88,7 +86,6 @@ public class WarehouseService {
         WarehouseCell cell = new WarehouseCell();
         cell.setRow(dto.getRow());
         cell.setColumn(dto.getColumn());
-        cell.setLevel(dto.getLevel());
         List<CellItem> items = new ArrayList<>();
         for (WarehouseCellDTO.WarehouseCellItemDTO item : dto.getItems()) {
             Optional<Product> product = productRepository.findById(item.getProductId());
@@ -115,11 +112,10 @@ public class WarehouseService {
                 for (int l = 0; l < LEVELS; l++) {
                     final int rr = r;
                     final int cc = c;
-                    final int ll = l;
                     boolean present = cells.stream().anyMatch(cell
-                            -> cell.getRow() == rr && cell.getColumn() == cc && cell.getLevel() == ll);
+                            -> cell.getRow() == rr && cell.getColumn() == cc);
                     if (!present) {
-                        WarehouseCell empty = new WarehouseCell(rr, cc, ll, new ArrayList<>());
+                        WarehouseCell empty = new WarehouseCell(rr, cc, new ArrayList<>());
                         cells.add(empty);
                         added = true;
                     }
@@ -128,8 +124,7 @@ public class WarehouseService {
         }
         // sort for stable order: row, column, level
         cells.sort(Comparator.comparingInt(WarehouseCell::getRow)
-                .thenComparingInt(WarehouseCell::getColumn)
-                .thenComparingInt(WarehouseCell::getLevel));
+                .thenComparingInt(WarehouseCell::getColumn));
         if (added) {
             warehouseRepository.save(wh);
         }

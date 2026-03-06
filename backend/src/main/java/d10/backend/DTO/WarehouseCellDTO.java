@@ -15,7 +15,6 @@ import lombok.Setter;
 public class WarehouseCellDTO {
     private int row;
     private int column;
-    private int level;
     private List<WarehouseCellItemDTO> items = new ArrayList<>();
 
     @Getter
