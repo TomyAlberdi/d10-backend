@@ -49,7 +49,7 @@ public class InvoiceService {
     public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
         invoice.setInvoiceNumber(generateNextInvoiceNumber());
-        if (invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) {
+        if (invoice.getStatus() == Invoice.Status.ENTREGADO) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
             }
@@ -59,7 +59,7 @@ public class InvoiceService {
             invoice.setStockDecreased(true);
         }
         invoiceRepository.save(invoice);
-/*         if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
+        /*         if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
         } */
         return invoice;
@@ -67,9 +67,7 @@ public class InvoiceService {
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = findById(id);
-        boolean shouldUpdateStock = !invoice.getStockDecreased()
-                && (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO)
-                && (createInvoiceDTO.getStatus() == Invoice.Status.PAGO || createInvoiceDTO.getStatus() == Invoice.Status.ENVIADO || createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
+        boolean shouldUpdateStock = !invoice.getStockDecreased() && (createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
         if (shouldUpdateStock) {
             for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
@@ -79,7 +77,7 @@ public class InvoiceService {
             }
             invoice.setStockDecreased(true);
         }
-/*         Invoice.Status newStatus = createInvoiceDTO.getStatus();
+        /*         Invoice.Status newStatus = createInvoiceDTO.getStatus();
         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
         boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
         if ((isSetToPaid && !isAlreayPaid) && invoice.getPaymentMethod() != null) {
@@ -121,7 +119,7 @@ public class InvoiceService {
         Invoice invoice = findById(id);
         boolean shouldUpdateStock = !invoice.getStockDecreased()
                 && (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO)
-                && (newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO);
+                && (newStatus == Invoice.Status.ENTREGADO);
         if (shouldUpdateStock) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
@@ -133,7 +131,7 @@ public class InvoiceService {
         }
         invoice.setStatus(newStatus);
         invoiceRepository.save(invoice);
-/*         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
+        /*         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
         boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
         if ((isSetToPaid && !isAlreayPaid) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
