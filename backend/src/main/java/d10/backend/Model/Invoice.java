@@ -27,6 +27,7 @@ public class Invoice {
     private List<InvoiceProduct> products;
     private Double discount;
     private Double total;
+    private String notes;
     private Double partialPayment = 0.0;
     private Boolean stockDecreased = false;
     private String invoiceNumber;
