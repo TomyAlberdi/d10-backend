@@ -39,6 +39,11 @@ public class ProductService {
         }
     }
 
+    public Page<Product> getDiscontinuedProducts(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return productPaginationRepository.findDiscontinuedProducts(pageable);
+    }
+
     public List<Product> getProductsWithStockGreaterThanZero() {
         return productRepository.findByStockQuantityGreaterThan(0);
     }

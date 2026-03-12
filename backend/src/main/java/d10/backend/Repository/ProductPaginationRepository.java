@@ -12,18 +12,27 @@ import d10.backend.Model.Product;
 public interface ProductPaginationRepository extends MongoRepository<Product, String> {
 
     @Override
-    @Query(value = "{}", sort = "{ 'providerName': 1, 'name': 1 }")
+    @Query(value = "{ 'discontinued': false }", sort = "{ 'providerName': 1, 'name': 1 }")
     Page<Product> findAll(Pageable pageable);
 
     @Query(
-            value = "{ $or: [ "
+            value = "{ '$and': [ "
+            + "{ 'discontinued': false }, "
+            + "{ '$or': [ "
             + "{ 'name': { $regex: ?0, $options: 'i' } }, "
             + "{ 'code': { $regex: ?0, $options: 'i' } }, "
-            + "{ 'description': { $regex: ?0, $options: 'i' } } "
+            + "{ 'description': { $regex: ?0, $options: 'i' } }, "
             + "{ 'providerName': { $regex: ?0, $options: 'i' } } "
+            + "] } "
             + "] }",
             sort = "{ 'providerName': 1, 'name': 1 }"
     )
     Page<Product> findBySearchQuery(String query, Pageable pageable);
+
+    @Query(
+            value = "{ 'discontinued': true }",
+            sort = "{ 'providerName': 1, 'name': 1 }"
+    )
+    Page<Product> findDiscontinuedProducts(Pageable pageable);
 
 }

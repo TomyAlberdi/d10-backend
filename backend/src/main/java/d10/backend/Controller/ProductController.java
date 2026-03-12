@@ -33,6 +33,14 @@ public class ProductController {
         return ResponseEntity.ok(productService.getPaginatedProducts(query, page, size));
     }
 
+    @GetMapping("/discontinued")
+    public ResponseEntity<?> listDiscontinued(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "30") int size
+    ) {
+        return ResponseEntity.ok(productService.getDiscontinuedProducts(page, size));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
         return ResponseEntity.ok(productService.findById(id));
