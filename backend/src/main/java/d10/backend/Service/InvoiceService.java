@@ -49,7 +49,7 @@ public class InvoiceService {
     public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
         invoice.setInvoiceNumber(generateNextInvoiceNumber());
-        if (invoice.getStatus() == Invoice.Status.ENTREGADO) {
+        if (invoice.getStatus() == Invoice.Status.ENTREGADO || invoice.getStockDecreased().equals(true)) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
             }
@@ -67,7 +67,7 @@ public class InvoiceService {
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = findById(id);
-        boolean shouldUpdateStock = !invoice.getStockDecreased() && (createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
+        boolean shouldUpdateStock = !invoice.getStockDecreased() && ((createInvoiceDTO.getStockDecreased().equals(true)) || (createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO));
         if (shouldUpdateStock) {
             for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());

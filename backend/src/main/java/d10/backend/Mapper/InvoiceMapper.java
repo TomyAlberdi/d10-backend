@@ -18,6 +18,7 @@ public class InvoiceMapper {
         invoice.setClient(createInvoiceDTO.getClient());
         invoice.setProducts(createInvoiceDTO.getProducts());
         invoice.setStatus(createInvoiceDTO.getStatus());
+        invoice.setStockDecreased(createInvoiceDTO.getStockDecreased());
         invoice.setDiscount(createInvoiceDTO.getDiscount());
         invoice.setPartialPayment(createInvoiceDTO.getPartialPayment());
         invoice.setTotal(createInvoiceDTO.getTotal());

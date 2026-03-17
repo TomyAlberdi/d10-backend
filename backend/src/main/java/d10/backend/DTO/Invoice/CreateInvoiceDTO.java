@@ -18,6 +18,7 @@ public class CreateInvoiceDTO {
     private Client client;
     private List<InvoiceProduct> products;
     private Invoice.Status status;
+    private Boolean stockDecreased;
     private Double discount;
     private Double total;
     private String notes;
