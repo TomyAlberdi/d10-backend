@@ -105,7 +105,7 @@ public class InvoiceService {
             if (status == null) {
                 return invoiceRepository.findTop15ByOrderByDateDesc();
             } else {
-                return invoiceRepository.findTop15ByStatusOrderByDateDesc(status);
+                return invoiceRepository.findByStatusOrderByDateDesc(status);
             }
         }
         if (status == null) {
@@ -113,6 +113,10 @@ public class InvoiceService {
         } else {
             return invoiceRepository.findByStatusAndClientCuitDniContainingIgnoreCaseOrStatusAndClientNameContainingIgnoreCase(status, q, status, q);
         }
+    }
+
+    public List<Invoice> getInvoicesWithStockNotDecreased() {
+        return invoiceRepository.findByStockDecreasedFalseOrderByDateDesc();
     }
 
     public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus) {

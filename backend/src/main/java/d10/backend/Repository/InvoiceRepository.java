@@ -17,8 +17,10 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 
 	Optional<Invoice> findTopByOrderByInvoiceNumberDesc();
 
-	List<Invoice> findTop15ByStatusOrderByDateDesc(Invoice.Status status);
+	List<Invoice> findByStatusOrderByDateDesc(Invoice.Status status);
 
 	List<Invoice> findByStatusAndClientCuitDniContainingIgnoreCaseOrStatusAndClientNameContainingIgnoreCase(Invoice.Status status, String cuitDni, Invoice.Status status2, String name);
+
+	List<Invoice> findByStockDecreasedFalseOrderByDateDesc();
 
 }

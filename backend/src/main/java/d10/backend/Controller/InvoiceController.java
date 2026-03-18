@@ -49,6 +49,11 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.searchInvoices(q, status));
     }
 
+    @GetMapping("/stock-not-decreased")
+    public ResponseEntity<?> getInvoicesWithStockNotDecreased() {
+        return ResponseEntity.ok(invoiceService.getInvoicesWithStockNotDecreased());
+    }
+
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestParam(name = "status", required = true) Invoice.Status status) {
         return ResponseEntity.ok(invoiceService.updateInvoiceStatus(id, status));
