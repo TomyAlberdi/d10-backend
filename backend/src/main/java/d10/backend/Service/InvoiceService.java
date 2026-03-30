@@ -148,7 +148,7 @@ public class InvoiceService {
         CreateCashRegisterTransactionDTO dto = new CreateCashRegisterTransactionDTO();
         dto.setAmount(invoice.getTotal());
         dto.setType(CashRegisterTransaction.TransactionType.IN);
-        dto.setDescription("Pago de factura " + invoice.getInvoiceNumber());
+        dto.setDescription("Pago de venta " + invoice.getInvoiceNumber());
         dto.setRegisterType(registerType);
         cashRegisterService.createTransaction(dto);
     }

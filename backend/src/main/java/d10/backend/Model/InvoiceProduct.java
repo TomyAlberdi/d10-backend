@@ -20,4 +20,5 @@ public class InvoiceProduct {
     private Integer saleUnitQuantity;
     private Integer individualDiscount;
     private Double subtotal;
+    private String dimensions;
 }

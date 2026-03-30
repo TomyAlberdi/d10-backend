@@ -3,6 +3,7 @@ package d10.backend.Controller;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -59,6 +60,21 @@ public class CashRegisterController {
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(value = "type", required = false) CashRegister.CashRegisterType type) {
         return ResponseEntity.ok(cashRegisterService.listTransactionsByDate(date, type));
+    }
+
+    /**
+     * Returns paginated transactions.
+     * Default page size: 50
+     * If date is provided, filters by that date. If not provided, returns all transactions.
+     * Supports optional type filter (PAPER or DIGITAL).
+     */
+    @GetMapping("/transactions/paginated")
+    public ResponseEntity<Page<CashRegisterTransactionDTO>> listTransactionsPaginated(
+            @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "type", required = false) CashRegister.CashRegisterType type,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "50") int size) {
+        return ResponseEntity.ok(cashRegisterService.listTransactionsPaginated(date, type, page, size));
     }
 
     /**

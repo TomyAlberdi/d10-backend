@@ -7,6 +7,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.CashRegister.CashRegisterDTO;
@@ -131,6 +135,49 @@ public class CashRegisterService {
             return -amount;
         }
         return amount;
+    }
+
+    /**
+     * Returns paginated transactions for a given date range and optional register type.
+     * Default page size is 50.
+     * If date is null, returns all transactions.
+     * Transactions are ordered by date with most recent first.
+     */
+    public Page<CashRegisterTransactionDTO> listTransactionsPaginated(
+            LocalDate date,
+            CashRegister.CashRegisterType type,
+            int page,
+            int size) {
+        // Use default size of 50 if not specified or if size is 0
+        if (size <= 0) {
+            size = 50;
+        }
+        Pageable pageable = PageRequest.of(page, size, Sort.by("dateTime").descending());
+
+        Page<CashRegisterTransaction> transactions;
+        
+        // If date is null, fetch all transactions
+        if (date == null) {
+            if (type != null) {
+                transactions = transactionRepository
+                        .findByRegisterTypeOrderByDateTimeAsc(type, pageable);
+            } else {
+                transactions = transactionRepository
+                        .findAllByOrderByDateTimeAsc(pageable);
+            }
+        } else {
+            // Otherwise, fetch transactions for the specific date
+            LocalDateTime start = date.atStartOfDay();
+            LocalDateTime end = LocalDateTime.of(date, LocalTime.MAX);
+            if (type != null) {
+                transactions = transactionRepository
+                        .findByDateTimeBetweenAndRegisterTypeOrderByDateTimeAsc(start, end, type, pageable);
+            } else {
+                transactions = transactionRepository
+                        .findByDateTimeBetweenOrderByDateTimeAsc(start, end, pageable);
+            }
+        }
+        return transactions.map(CashRegisterMapper::toDTO);
     }
 
 }
