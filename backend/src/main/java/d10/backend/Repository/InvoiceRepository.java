@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import d10.backend.Model.Invoice;
@@ -22,5 +23,8 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 	List<Invoice> findByStatusAndClientCuitDniContainingIgnoreCaseOrStatusAndClientNameContainingIgnoreCase(Invoice.Status status, String cuitDni, Invoice.Status status2, String name);
 
 	List<Invoice> findByStockDecreasedFalseOrderByDateDesc();
+
+	@Query("{ 'products.id': ?0 }")
+	List<Invoice> findByProductId(String productId);
 
 }

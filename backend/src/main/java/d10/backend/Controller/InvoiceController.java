@@ -59,4 +59,9 @@ public class InvoiceController {
         return ResponseEntity.ok(invoiceService.updateInvoiceStatus(id, status));
     }
 
+    @GetMapping("/product/{productId}")
+    public ResponseEntity<?> getInvoicesByProductId(@PathVariable String productId) {
+        return ResponseEntity.ok(invoiceService.findInvoicesByProductId(productId));
+    }
+
 }

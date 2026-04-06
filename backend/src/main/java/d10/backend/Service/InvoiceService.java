@@ -119,6 +119,10 @@ public class InvoiceService {
         return invoiceRepository.findByStockDecreasedFalseOrderByDateDesc();
     }
 
+    public List<Invoice> findInvoicesByProductId(String productId) {
+        return invoiceRepository.findByProductId(productId);
+    }
+
     public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus) {
         Invoice invoice = findById(id);
         boolean shouldUpdateStock = !invoice.getStockDecreased()
