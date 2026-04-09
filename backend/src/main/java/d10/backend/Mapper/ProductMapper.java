@@ -1,12 +1,12 @@
 package d10.backend.Mapper;
 
-import d10.backend.DTO.Product.CreateProductDTO;
-import d10.backend.Model.Product;
-import d10.backend.Model.ProductStock;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+
+import d10.backend.DTO.Product.CreateProductDTO;
+import d10.backend.Model.Product;
+import d10.backend.Model.ProductStock;
 
 public class ProductMapper {
 
@@ -39,10 +39,12 @@ public class ProductMapper {
         product.setMeasureType(createProductDTO.getMeasureType());
         // Sale Data
         product.setSaleUnitType(createProductDTO.getSaleUnitType());
+        product.setCostBySaleUnit(createProductDTO.getCostBySaleUnit());
     }
 
     public static void setCommercialProductFields(Product product, CreateProductDTO dto) {
         double parsedPriceBySaleUnit = dto.getPriceBySaleUnit();
+        double parsedCostBySaleUnit = dto.getCostBySaleUnit() != null ? dto.getCostBySaleUnit() : 0.0;
         double priceByMeasureUnit = 0.0;
         if (dto.getSaleUnitType().equals(Product.SaleType.UNIDAD) && dto.getMeasureType().equals(Product.MeasureType.UNIDAD)) {
             dto.setMeasurePerSaleUnit(1.0);
@@ -50,9 +52,16 @@ public class ProductMapper {
         } else if (dto.getMeasurePerSaleUnit() > 0) {
             priceByMeasureUnit = truncateToTwoDecimals(parsedPriceBySaleUnit / dto.getMeasurePerSaleUnit());
         }
+        // Calculate profit percentage
+        double profit = 0.0;
+        if (parsedCostBySaleUnit > 0) {
+            profit = truncateToTwoDecimals(((parsedPriceBySaleUnit - parsedCostBySaleUnit) / parsedCostBySaleUnit) * 100);
+        }
         product.setMeasurePerSaleUnit(dto.getMeasurePerSaleUnit());
         product.setPriceByMeasureUnit(priceByMeasureUnit);
         product.setPriceBySaleUnit(parsedPriceBySaleUnit);
+        product.setCostBySaleUnit(parsedCostBySaleUnit);
+        product.setProfit(profit);
     }
 
     private static double truncateToTwoDecimals(double value) {

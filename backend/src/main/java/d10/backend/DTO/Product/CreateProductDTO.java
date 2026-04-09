@@ -30,6 +30,7 @@ public class CreateProductDTO {
     private Product.MeasureType measureType;
     // Sale Data
     private Product.SaleType saleUnitType;
+    private Double costBySaleUnit;
     private Double priceBySaleUnit;
     private Double measurePerSaleUnit;
 }
