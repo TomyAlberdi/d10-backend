@@ -27,4 +27,7 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 	@Query("{ 'products.id': ?0 }")
 	List<Invoice> findByProductId(String productId);
 
+	@Query("{ 'date': { $gte: ?0, $lt: ?1 }, 'status': { $in: ?2 } }")
+	List<Invoice> findByDateRangeAndStatus(java.time.LocalDate startDate, java.time.LocalDate endDate, java.util.List<Invoice.Status> statuses);
+
 }
