@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import d10.backend.DTO.SortByEnum;
+import d10.backend.DTO.TimeSpanEnum;
 import d10.backend.Service.DataService;
 import lombok.RequiredArgsConstructor;
 
@@ -78,5 +80,13 @@ public class DataController {
     @GetMapping("/comprehensive")
     public ResponseEntity<?> getComprehensiveAnalysis() {
         return ResponseEntity.ok(dataService.getComprehensiveAnalysis());
+    }
+
+    /**
+     * Get the 15 best selling products for a given time span and sort criteria
+     */
+    @GetMapping("/best-selling-products/{timeSpan}/{sortBy}")
+    public ResponseEntity<?> getBestSellingProducts(@PathVariable TimeSpanEnum timeSpan, @PathVariable SortByEnum sortBy) {
+        return ResponseEntity.ok(dataService.getBestSellingProducts(timeSpan, sortBy));
     }
 }
