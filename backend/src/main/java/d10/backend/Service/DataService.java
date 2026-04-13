@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.Invoice.MonthlySummaryRecordDTO;
 import d10.backend.DTO.Product.BestSellingProductDTO;
+import d10.backend.DTO.Product.TopSellingProductDTO;
 import d10.backend.DTO.SortByEnum;
 import d10.backend.DTO.TimeSpanEnum;
 import d10.backend.Model.Invoice;
@@ -70,62 +71,6 @@ public class DataService {
         }
 
         return monthlySummaries;
-    }
-
-    /**
-     * Get data analysis results from Product model
-     */
-    public Object getProductAnalysis() {
-        // TODO: Implement product data analysis
-        return null;
-    }
-
-    /**
-     * Get data analysis results from Client model
-     */
-    public Object getClientAnalysis() {
-        // TODO: Implement client data analysis
-        return null;
-    }
-
-    /**
-     * Get data analysis results from Invoice model
-     */
-    public Object getInvoiceAnalysis() {
-        // TODO: Implement invoice data analysis
-        return null;
-    }
-
-    /**
-     * Get data analysis results from CashRegister model
-     */
-    public Object getCashRegisterAnalysis() {
-        // TODO: Implement cash register data analysis
-        return null;
-    }
-
-    /**
-     * Get data analysis results from Warehouse model
-     */
-    public Object getWarehouseAnalysis() {
-        // TODO: Implement warehouse data analysis
-        return null;
-    }
-
-    /**
-     * Get data analysis results from Provider model
-     */
-    public Object getProviderAnalysis() {
-        // TODO: Implement provider data analysis
-        return null;
-    }
-
-    /**
-     * Get comprehensive data analysis from all models
-     */
-    public Object getComprehensiveAnalysis() {
-        // TODO: Implement comprehensive data analysis
-        return null;
     }
 
     /**
@@ -263,6 +208,148 @@ public class DataService {
                 yield bNetIncome.compareTo(aNetIncome);
             }
         };
+    }
+
+    /**
+     * Get top 5 best selling products by category
+     * @param category the category name to filter products
+     * @param sortBy the field to sort by (SALES_AMOUNT or GROSS_INCOME)
+     * @param timespan the time span to filter invoices (LAST_MONTH, LAST_YEAR, or ALL_TIME)
+     * @return list of up to 5 best selling products in the category with sales metrics
+     */
+    public List<TopSellingProductDTO> getTop5ByCategory(String category, SortByEnum sortBy, TimeSpanEnum timespan) {
+        LocalDate startDate = calculateStartDate(timespan);
+        List<Invoice> invoices = invoiceRepository.findAll();
+        
+        // Filter invoices by date and status
+        List<Invoice> filteredInvoices = invoices.stream()
+                .filter(i -> i.getDate() != null && i.getDate().isAfter(startDate.minusDays(1)))
+                .filter(i -> i.getStatus() != Invoice.Status.CANCELADO)
+                .collect(Collectors.toList());
+        
+        // Map to store product stats: key = product id, value = [salesAmount, totalIncome]
+        Map<String, Map<String, Object>> productStats = new HashMap<>();
+        
+        for (Invoice invoice : filteredInvoices) {
+            if (invoice.getProducts() != null) {
+                for (InvoiceProduct invoiceProduct : invoice.getProducts()) {
+                    Product product = productRepository.findById(invoiceProduct.getId()).orElse(null);
+                    if (product == null) continue;
+                    
+                    // Check if product is in the requested category
+                    if (product.getCategory() != null && product.getCategory().equalsIgnoreCase(category)) {
+                        if (!productStats.containsKey(product.getId())) {
+                            Map<String, Object> stats = new HashMap<>();
+                            stats.put("salesAmount", 0);
+                            stats.put("totalIncome", 0.0);
+                            stats.put("product", product);
+                            productStats.put(product.getId(), stats);
+                        }
+                        
+                        Map<String, Object> stats = productStats.get(product.getId());
+                        int currentAmount = (Integer) stats.get("salesAmount");
+                        double currentIncome = (Double) stats.get("totalIncome");
+                        
+                        Integer saleQuantity = invoiceProduct.getSaleUnitQuantity();
+                        Double subtotal = invoiceProduct.getSubtotal();
+                        
+                        stats.put("salesAmount", currentAmount + (saleQuantity != null ? saleQuantity : 0));
+                        stats.put("totalIncome", currentIncome + (subtotal != null ? subtotal : 0.0));
+                    }
+                }
+            }
+        }
+        
+        // Convert to DTOs and sort
+        List<TopSellingProductDTO> results = productStats.values().stream()
+                .map(stats -> new TopSellingProductDTO(
+                        (Product) stats.get("product"),
+                        (Integer) stats.get("salesAmount"),
+                        (Double) stats.get("totalIncome"),
+                        timespan
+                ))
+                .sorted((a, b) -> {
+                    if (sortBy == SortByEnum.SALES_AMOUNT) {
+                        return b.getSalesAmount().compareTo(a.getSalesAmount());
+                    } else { // GROSS_INCOME
+                        return b.getTotalIncome().compareTo(a.getTotalIncome());
+                    }
+                })
+                .limit(5)
+                .collect(Collectors.toList());
+        
+        return results;
+    }
+
+    /**
+     * Get top 5 best selling products by subcategory
+     * @param subcategory the subcategory name to filter products
+     * @param sortBy the field to sort by (SALES_AMOUNT or GROSS_INCOME)
+     * @param timespan the time span to filter invoices (LAST_MONTH, LAST_YEAR, or ALL_TIME)
+     * @return list of up to 5 best selling products in the subcategory with sales metrics
+     */
+    public List<TopSellingProductDTO> getTop5BySubcategory(String subcategory, SortByEnum sortBy, TimeSpanEnum timespan) {
+        LocalDate startDate = calculateStartDate(timespan);
+        List<Invoice> invoices = invoiceRepository.findAll();
+        
+        // Filter invoices by date and status
+        List<Invoice> filteredInvoices = invoices.stream()
+                .filter(i -> i.getDate() != null && i.getDate().isAfter(startDate.minusDays(1)))
+                .filter(i -> i.getStatus() != Invoice.Status.CANCELADO)
+                .collect(Collectors.toList());
+        
+        // Map to store product stats: key = product id, value = [salesAmount, totalIncome]
+        Map<String, Map<String, Object>> productStats = new HashMap<>();
+        
+        for (Invoice invoice : filteredInvoices) {
+            if (invoice.getProducts() != null) {
+                for (InvoiceProduct invoiceProduct : invoice.getProducts()) {
+                    Product product = productRepository.findById(invoiceProduct.getId()).orElse(null);
+                    if (product == null) continue;
+                    
+                    // Check if product is in the requested subcategory
+                    if (product.getSubcategory() != null && product.getSubcategory().equalsIgnoreCase(subcategory)) {
+                        if (!productStats.containsKey(product.getId())) {
+                            Map<String, Object> stats = new HashMap<>();
+                            stats.put("salesAmount", 0);
+                            stats.put("totalIncome", 0.0);
+                            stats.put("product", product);
+                            productStats.put(product.getId(), stats);
+                        }
+                        
+                        Map<String, Object> stats = productStats.get(product.getId());
+                        int currentAmount = (Integer) stats.get("salesAmount");
+                        double currentIncome = (Double) stats.get("totalIncome");
+                        
+                        Integer saleQuantity = invoiceProduct.getSaleUnitQuantity();
+                        Double subtotal = invoiceProduct.getSubtotal();
+                        
+                        stats.put("salesAmount", currentAmount + (saleQuantity != null ? saleQuantity : 0));
+                        stats.put("totalIncome", currentIncome + (subtotal != null ? subtotal : 0.0));
+                    }
+                }
+            }
+        }
+        
+        // Convert to DTOs and sort
+        List<TopSellingProductDTO> results = productStats.values().stream()
+                .map(stats -> new TopSellingProductDTO(
+                        (Product) stats.get("product"),
+                        (Integer) stats.get("salesAmount"),
+                        (Double) stats.get("totalIncome"),
+                        timespan
+                ))
+                .sorted((a, b) -> {
+                    if (sortBy == SortByEnum.SALES_AMOUNT) {
+                        return b.getSalesAmount().compareTo(a.getSalesAmount());
+                    } else { // GROSS_INCOME
+                        return b.getTotalIncome().compareTo(a.getTotalIncome());
+                    }
+                })
+                .limit(5)
+                .collect(Collectors.toList());
+        
+        return results;
     }
 
     /**

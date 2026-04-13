@@ -19,7 +19,6 @@ import d10.backend.Model.ProductStock;
 import d10.backend.Model.ProductStockRecord;
 import d10.backend.Repository.ProductPaginationRepository;
 import d10.backend.Repository.ProductRepository;
-import d10.backend.Repository.ProviderRepository;
 import lombok.AllArgsConstructor;
 
 @Service
@@ -28,7 +27,6 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductPaginationRepository productPaginationRepository;
-    private final ProviderRepository providerRepository;
 
     public Page<Product> getPaginatedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -86,13 +84,18 @@ public class ProductService {
     public void checkStockSufficient(String productId, int requiredQuantity) {
         Product product = findById(productId);
         ProductStock stock = product.getStock();
-        if (stock == null || stock.getQuantity() < requiredQuantity) {
-            throw new InsufficientStockException("Stock insuficiente para producto " + product.getName() + ". Disponible: " + (stock != null ? stock.getQuantity() : 0) + ", requerido: " + requiredQuantity);
+        if (stock == null) {
+            throw new InsufficientStockException("Stock insuficiente para producto " + product.getName() + ". Disponible: 0, requerido: " + requiredQuantity);
+        }
+        Integer quantity = stock.getQuantity();
+        int availableQuantity = (quantity != null) ? quantity : 0;
+        if (availableQuantity < requiredQuantity) {
+            throw new InsufficientStockException("Stock insuficiente para producto " + product.getName() + ". Disponible: " + availableQuantity + ", requerido: " + requiredQuantity);
         }
     }
 
     public Product updateStockDecrease(String productId, int quantity, LocalDate date) {
-        Product product = findById(productId);
+        findById(productId);
         ProductStockRecord stockRecord = new ProductStockRecord();
         stockRecord.setType(ProductStockRecord.RecordType.OUT);
         stockRecord.setQuantity(quantity);
@@ -133,5 +136,7 @@ public class ProductService {
         productRepository.save(product);
         return product;
     }
+
+
 
 }

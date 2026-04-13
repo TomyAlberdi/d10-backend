@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.SortByEnum;
@@ -27,66 +28,32 @@ public class DataController {
     }
 
     /**
-     * Get data analysis results from Product model
-     */
-    @GetMapping("/product-analysis")
-    public ResponseEntity<?> getProductAnalysis() {
-        return ResponseEntity.ok(dataService.getProductAnalysis());
-    }
-
-    /**
-     * Get data analysis results from Client model
-     */
-    @GetMapping("/client-analysis")
-    public ResponseEntity<?> getClientAnalysis() {
-        return ResponseEntity.ok(dataService.getClientAnalysis());
-    }
-
-    /**
-     * Get data analysis results from Invoice model
-     */
-    @GetMapping("/invoice-analysis")
-    public ResponseEntity<?> getInvoiceAnalysis() {
-        return ResponseEntity.ok(dataService.getInvoiceAnalysis());
-    }
-
-    /**
-     * Get data analysis results from CashRegister model
-     */
-    @GetMapping("/cash-register-analysis")
-    public ResponseEntity<?> getCashRegisterAnalysis() {
-        return ResponseEntity.ok(dataService.getCashRegisterAnalysis());
-    }
-
-    /**
-     * Get data analysis results from Warehouse model
-     */
-    @GetMapping("/warehouse-analysis")
-    public ResponseEntity<?> getWarehouseAnalysis() {
-        return ResponseEntity.ok(dataService.getWarehouseAnalysis());
-    }
-
-    /**
-     * Get data analysis results from Provider model
-     */
-    @GetMapping("/provider-analysis")
-    public ResponseEntity<?> getProviderAnalysis() {
-        return ResponseEntity.ok(dataService.getProviderAnalysis());
-    }
-
-    /**
-     * Get comprehensive data analysis from all models
-     */
-    @GetMapping("/comprehensive")
-    public ResponseEntity<?> getComprehensiveAnalysis() {
-        return ResponseEntity.ok(dataService.getComprehensiveAnalysis());
-    }
-
-    /**
      * Get the 15 best selling products for a given time span and sort criteria
      */
     @GetMapping("/best-selling-products/{timeSpan}/{sortBy}")
     public ResponseEntity<?> getBestSellingProducts(@PathVariable TimeSpanEnum timeSpan, @PathVariable SortByEnum sortBy) {
         return ResponseEntity.ok(dataService.getBestSellingProducts(timeSpan, sortBy));
+    }
+
+    /**
+     * Get top 5 best selling products by category
+     */
+    @GetMapping("/top-by-category")
+    public ResponseEntity<?> getTop5ByCategory(
+            @RequestParam(value = "category") String category,
+            @RequestParam(value = "sortBy") SortByEnum sortBy,
+            @RequestParam(value = "timespan") TimeSpanEnum timespan) {
+        return ResponseEntity.ok(dataService.getTop5ByCategory(category, sortBy, timespan));
+    }
+
+    /**
+     * Get top 5 best selling products by subcategory
+     */
+    @GetMapping("/top-by-subcategory")
+    public ResponseEntity<?> getTop5BySubcategory(
+            @RequestParam(value = "subcategory") String subcategory,
+            @RequestParam(value = "sortBy") SortByEnum sortBy,
+            @RequestParam(value = "timespan") TimeSpanEnum timespan) {
+        return ResponseEntity.ok(dataService.getTop5BySubcategory(subcategory, sortBy, timespan));
     }
 }
