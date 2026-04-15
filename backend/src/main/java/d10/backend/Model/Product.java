@@ -35,10 +35,9 @@ public class Product {
     // Measure Data
     private MeasureType measureType;
     private Double priceByMeasureUnit;
-    //private Double costByMeasure;
+    private Double costByMeasureUnit;
     // Sale Data
     private SaleType saleUnitType;
-    private Double costBySaleUnit;
     private Double priceBySaleUnit;
     private Double measurePerSaleUnit;
     private Double profit; // Profit percentage (max 2 decimals)

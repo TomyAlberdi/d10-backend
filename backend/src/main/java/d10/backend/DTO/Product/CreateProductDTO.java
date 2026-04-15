@@ -1,13 +1,13 @@
 package d10.backend.DTO.Product;
 
+import java.util.List;
+
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductCharacteristic;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.util.List;
 
 @Getter
 @Setter
@@ -30,7 +30,8 @@ public class CreateProductDTO {
     private Product.MeasureType measureType;
     // Sale Data
     private Product.SaleType saleUnitType;
-    private Double costBySaleUnit;
+    private Double costByMeasureUnit;
+    private Double profitPercentage;
     private Double priceBySaleUnit;
     private Double measurePerSaleUnit;
 }

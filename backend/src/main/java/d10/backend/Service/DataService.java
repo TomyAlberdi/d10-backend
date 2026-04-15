@@ -148,13 +148,15 @@ public class DataService {
                     return null;
                 }
 
-                // Calculate net income if cost and profit are available
+                // Calculate net income if cost and measure per sale unit are available
                 Double netIncome = null;
-                if (product.getCostBySaleUnit() != null && product.getCostBySaleUnit() > 0 &&
-                    product.getProfit() != null && product.getProfit() > 0) {
+                if (product.getCostByMeasureUnit() != null && product.getCostByMeasureUnit() > 0 &&
+                    product.getMeasurePerSaleUnit() != null && product.getMeasurePerSaleUnit() > 0) {
                     
-                    // Total cost = costBySaleUnit * total quantity of sales units sold
-                    Double totalCost = salesData.totalSaleUnits * product.getCostBySaleUnit();
+                    // Cost per sale unit = costByMeasureUnit * measurePerSaleUnit
+                    Double costPerSaleUnit = product.getCostByMeasureUnit() * product.getMeasurePerSaleUnit();
+                    // Total cost = costPerSaleUnit * total quantity of sales units sold
+                    Double totalCost = salesData.totalSaleUnits * costPerSaleUnit;
                     netIncome = salesData.totalIncome - totalCost;
                 }
 

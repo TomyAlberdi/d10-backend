@@ -39,29 +39,37 @@ public class ProductMapper {
         product.setMeasureType(createProductDTO.getMeasureType());
         // Sale Data
         product.setSaleUnitType(createProductDTO.getSaleUnitType());
-        product.setCostBySaleUnit(createProductDTO.getCostBySaleUnit());
+        product.setCostByMeasureUnit(createProductDTO.getCostByMeasureUnit());
     }
 
     public static void setCommercialProductFields(Product product, CreateProductDTO dto) {
-        double parsedPriceBySaleUnit = dto.getPriceBySaleUnit();
-        double parsedCostBySaleUnit = dto.getCostBySaleUnit() != null ? dto.getCostBySaleUnit() : 0.0;
+        double parsedCostByMeasureUnit = dto.getCostByMeasureUnit() != null ? dto.getCostByMeasureUnit() : 0.0;
+        double profitPercentage = dto.getProfitPercentage() != null ? dto.getProfitPercentage() : 0.0;
+        double measurePerSaleUnit = dto.getMeasurePerSaleUnit() != null ? dto.getMeasurePerSaleUnit() : 1.0;
+        
         double priceByMeasureUnit = 0.0;
+        double priceBySaleUnit = 0.0;
+        
+        // Calculate priceByMeasureUnit from costByMeasureUnit and profit percentage
+        if (profitPercentage > 0 && parsedCostByMeasureUnit > 0) {
+            priceByMeasureUnit = truncateToTwoDecimals(parsedCostByMeasureUnit * (1 + (profitPercentage / 100)));
+        } else {
+            priceByMeasureUnit = truncateToTwoDecimals(parsedCostByMeasureUnit);
+        }
+        
+        // Calculate priceBySaleUnit from priceByMeasureUnit and measurePerSaleUnit
         if (dto.getSaleUnitType().equals(Product.SaleType.UNIDAD) && dto.getMeasureType().equals(Product.MeasureType.UNIDAD)) {
             dto.setMeasurePerSaleUnit(1.0);
-            priceByMeasureUnit = truncateToTwoDecimals(parsedPriceBySaleUnit);
-        } else if (dto.getMeasurePerSaleUnit() > 0) {
-            priceByMeasureUnit = truncateToTwoDecimals(parsedPriceBySaleUnit / dto.getMeasurePerSaleUnit());
+            priceBySaleUnit = priceByMeasureUnit;
+        } else if (measurePerSaleUnit > 0) {
+            priceBySaleUnit = truncateToTwoDecimals(priceByMeasureUnit * measurePerSaleUnit);
         }
-        // Calculate profit percentage
-        double profit = 0.0;
-        if (parsedCostBySaleUnit > 0) {
-            profit = truncateToTwoDecimals(((parsedPriceBySaleUnit - parsedCostBySaleUnit) / parsedCostBySaleUnit) * 100);
-        }
-        product.setMeasurePerSaleUnit(dto.getMeasurePerSaleUnit());
+        
+        product.setMeasurePerSaleUnit(measurePerSaleUnit);
         product.setPriceByMeasureUnit(priceByMeasureUnit);
-        product.setPriceBySaleUnit(parsedPriceBySaleUnit);
-        product.setCostBySaleUnit(parsedCostBySaleUnit);
-        product.setProfit(profit);
+        product.setPriceBySaleUnit(priceBySaleUnit);
+        product.setCostByMeasureUnit(parsedCostByMeasureUnit);
+        product.setProfit(profitPercentage);
     }
 
     private static double truncateToTwoDecimals(double value) {
