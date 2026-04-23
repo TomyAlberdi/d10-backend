@@ -30,4 +30,10 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 	@Query("{ 'date': { $gte: ?0, $lt: ?1 }, 'status': { $in: ?2 } }")
 	List<Invoice> findByDateRangeAndStatus(java.time.LocalDate startDate, java.time.LocalDate endDate, java.util.List<Invoice.Status> statuses);
 
+	@Query("{ $or: [ { 'invoiceNumber': { $regex: ?0, $options: 'i' } }, { 'client.cuitDni': { $regex: ?0, $options: 'i' } }, { 'client.name': { $regex: ?0, $options: 'i' } } ] }")
+	List<Invoice> findByInvoiceNumberOrClientCuitDniOrClientName(String query);
+
+	@Query("{ 'status': ?0, $or: [ { 'invoiceNumber': { $regex: ?1, $options: 'i' } }, { 'client.cuitDni': { $regex: ?1, $options: 'i' } }, { 'client.name': { $regex: ?1, $options: 'i' } } ] }")
+	List<Invoice> findByStatusAndInvoiceNumberOrClientCuitDniOrClientName(Invoice.Status status, String query);
+
 }

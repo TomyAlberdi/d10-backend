@@ -97,7 +97,7 @@ public class InvoiceService {
         if (q == null) {
             return invoiceRepository.findTop15ByOrderByDateDesc();
         }
-        return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
+        return invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
     }
 
     public List<Invoice> searchInvoices(String q, Invoice.Status status) {
@@ -109,9 +109,9 @@ public class InvoiceService {
             }
         }
         if (status == null) {
-            return invoiceRepository.findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(q, q);
+            return invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
         } else {
-            return invoiceRepository.findByStatusAndClientCuitDniContainingIgnoreCaseOrStatusAndClientNameContainingIgnoreCase(status, q, status, q);
+            return invoiceRepository.findByStatusAndInvoiceNumberOrClientCuitDniOrClientName(status, q);
         }
     }
 
