@@ -95,7 +95,7 @@ public class InvoiceService {
 
     public List<Invoice> searchInvoices(String q) {
         if (q == null) {
-            return invoiceRepository.findTop15ByOrderByDateDesc();
+            return invoiceRepository.findTop15ByOrderByDateDescInvoiceNumberDesc();
         }
         return invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
     }
@@ -103,9 +103,9 @@ public class InvoiceService {
     public List<Invoice> searchInvoices(String q, Invoice.Status status) {
         if (q == null || q.trim().isEmpty()) {
             if (status == null) {
-                return invoiceRepository.findTop15ByOrderByDateDesc();
+                return invoiceRepository.findTop15ByOrderByDateDescInvoiceNumberDesc();
             } else {
-                return invoiceRepository.findByStatusOrderByDateDesc(status);
+                return invoiceRepository.findByStatusOrderByDateDescInvoiceNumberDesc(status);
             }
         }
         if (status == null) {
@@ -116,7 +116,7 @@ public class InvoiceService {
     }
 
     public List<Invoice> getInvoicesWithStockNotDecreased() {
-        return invoiceRepository.findByStockDecreasedFalseOrderByDateDesc();
+        return invoiceRepository.findByStockDecreasedFalseOrderByDateDescInvoiceNumberDesc();
     }
 
     public List<Invoice> findInvoicesByProductId(String productId) {
