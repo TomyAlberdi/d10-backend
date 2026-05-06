@@ -51,6 +51,11 @@ public class ProductController {
         return ResponseEntity.ok(productService.getProductsWithStockGreaterThanZero());
     }
 
+    @GetMapping("/providers")
+    public ResponseEntity<?> getProviders() {
+        return ResponseEntity.ok(productService.getDistinctProviders());
+    }
+
     @PostMapping
     public ResponseEntity<?> save(@RequestBody CreateProductDTO product) {
         return ResponseEntity.ok(productService.createProduct(product));
@@ -79,6 +84,13 @@ public class ProductController {
             @PathVariable String id,
             @RequestBody ProductStockRecord stockRecord) {
         return ResponseEntity.ok(productService.updateStock(id, stockRecord));
+    }
+
+    @PatchMapping("/update-price")
+    public ResponseEntity<?> updateCostsByProvider(
+            @RequestParam String providerName,
+            @RequestParam Double percentageChange) {
+        return ResponseEntity.ok(productService.updateCostsByProvider(providerName, percentageChange));
     }
 
 }

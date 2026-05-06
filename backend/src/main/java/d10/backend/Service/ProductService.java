@@ -137,6 +137,55 @@ public class ProductService {
         return product;
     }
 
+    public List<String> getDistinctProviders() {
+        List<Product> products = productRepository.findDistinctProviders();
+        List<String> providers = new ArrayList<>();
+        for (Product product : products) {
+            String provider = product.getProviderName();
+            if (provider != null && !provider.isEmpty() && !providers.contains(provider)) {
+                providers.add(provider);
+            }
+        }
+        providers.sort(String::compareTo);
+        return providers;
+    }
 
+    public List<Product> updateCostsByProvider(String providerName, Double percentageChange) {
+        List<Product> products = productRepository.findByProviderName(providerName);
+        if (products.isEmpty()) {
+            throw new ResourceNotFoundException("No se encontraron productos del proveedor " + providerName);
+        }
+
+        List<Product> updatedProducts = new ArrayList<>();
+        for (Product product : products) {
+            // Calculate new cost with percentage change
+            Double currentCost = product.getCostByMeasureUnit() != null ? product.getCostByMeasureUnit() : 0.0;
+            Double newCost = truncateToTwoDecimals(currentCost * (1 + (percentageChange / 100)));
+            
+            // Update cost
+            product.setCostByMeasureUnit(newCost);
+            
+            // Recalculate prices based on new cost and existing profit
+            Double profitPercentage = product.getProfit() != null ? product.getProfit() : 0.0;
+            Double newPriceByMeasureUnit = truncateToTwoDecimals(newCost * (1 + (profitPercentage / 100)));
+            product.setPriceByMeasureUnit(newPriceByMeasureUnit);
+            
+            // Recalculate priceBySaleUnit
+            Double measurePerSaleUnit = product.getMeasurePerSaleUnit() != null ? product.getMeasurePerSaleUnit() : 1.0;
+            Double newPriceBySaleUnit = truncateToTwoDecimals(newPriceByMeasureUnit * measurePerSaleUnit);
+            product.setPriceBySaleUnit(newPriceBySaleUnit);
+            
+            // Save the updated product
+            productRepository.save(product);
+            updatedProducts.add(product);
+        }
+        
+        return updatedProducts;
+    }
+
+    private static double truncateToTwoDecimals(double value) {
+        java.math.BigDecimal bd = java.math.BigDecimal.valueOf(value);
+        return bd.setScale(2, java.math.RoundingMode.FLOOR).doubleValue();
+    }
 
 }
