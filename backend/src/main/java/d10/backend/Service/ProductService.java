@@ -158,22 +158,39 @@ public class ProductService {
 
         List<Product> updatedProducts = new ArrayList<>();
         for (Product product : products) {
-            // Calculate new cost with percentage change
-            Double currentCost = product.getCostByMeasureUnit() != null ? product.getCostByMeasureUnit() : 0.0;
-            Double newCost = truncateToTwoDecimals(currentCost * (1 + (percentageChange / 100)));
+            Double currentCost = product.getCostByMeasureUnit();
+            Double profitPercentage = product.getProfit();
             
-            // Update cost
-            product.setCostByMeasureUnit(newCost);
+            // Check if both cost and profit have valid values
+            boolean hasCost = currentCost != null && currentCost > 0;
+            boolean hasProfit = profitPercentage != null && profitPercentage > 0;
             
-            // Recalculate prices based on new cost and existing profit
-            Double profitPercentage = product.getProfit() != null ? product.getProfit() : 0.0;
-            Double newPriceByMeasureUnit = truncateToTwoDecimals(newCost * (1 + (profitPercentage / 100)));
-            product.setPriceByMeasureUnit(newPriceByMeasureUnit);
-            
-            // Recalculate priceBySaleUnit
-            Double measurePerSaleUnit = product.getMeasurePerSaleUnit() != null ? product.getMeasurePerSaleUnit() : 1.0;
-            Double newPriceBySaleUnit = truncateToTwoDecimals(newPriceByMeasureUnit * measurePerSaleUnit);
-            product.setPriceBySaleUnit(newPriceBySaleUnit);
+            if (hasCost && hasProfit) {
+                // Calculate new cost with percentage change
+                Double newCost = truncateToTwoDecimals(currentCost * (1 + (percentageChange / 100)));
+                product.setCostByMeasureUnit(newCost);
+                
+                // Recalculate prices based on new cost and existing profit
+                Double newPriceByMeasureUnit = truncateToTwoDecimals(newCost * (1 + (profitPercentage / 100)));
+                product.setPriceByMeasureUnit(newPriceByMeasureUnit);
+                
+                // Recalculate priceBySaleUnit
+                Double measurePerSaleUnit = product.getMeasurePerSaleUnit() != null ? product.getMeasurePerSaleUnit() : 1.0;
+                Double newPriceBySaleUnit = truncateToTwoDecimals(newPriceByMeasureUnit * measurePerSaleUnit);
+                product.setPriceBySaleUnit(newPriceBySaleUnit);
+            } else {
+                // If cost or profit is missing/invalid, just apply percentage change to prices
+                Double currentPriceByMeasureUnit = product.getPriceByMeasureUnit() != null ? product.getPriceByMeasureUnit() : 0.0;
+                if (currentPriceByMeasureUnit > 0) {
+                    Double newPriceByMeasureUnit = truncateToTwoDecimals(currentPriceByMeasureUnit * (1 + (percentageChange / 100)));
+                    product.setPriceByMeasureUnit(newPriceByMeasureUnit);
+                    
+                    // Update priceBySaleUnit accordingly
+                    Double measurePerSaleUnit = product.getMeasurePerSaleUnit() != null ? product.getMeasurePerSaleUnit() : 1.0;
+                    Double newPriceBySaleUnit = truncateToTwoDecimals(newPriceByMeasureUnit * measurePerSaleUnit);
+                    product.setPriceBySaleUnit(newPriceBySaleUnit);
+                }
+            }
             
             // Save the updated product
             productRepository.save(product);
