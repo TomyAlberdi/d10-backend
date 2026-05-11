@@ -33,7 +33,14 @@ public class CashRegisterService {
     private final CashRegisterTransactionRepository transactionRepository;
 
     private CashRegister getOrCreateRegister(CashRegister.CashRegisterType type) {
-        String id = type == CashRegister.CashRegisterType.PAPER ? CashRegister.PAPER_CASH_REGISTER_ID : CashRegister.DIGITAL_CASH_REGISTER_ID;
+        String id;
+        if (type == CashRegister.CashRegisterType.PAPER) {
+            id = CashRegister.PAPER_CASH_REGISTER_ID;
+        } else if (type == CashRegister.CashRegisterType.DIGITAL) {
+            id = CashRegister.DIGITAL_CASH_REGISTER_ID;
+        } else {
+            id = CashRegister.USD_CASH_REGISTER_ID;
+        }
         Optional<CashRegister> existing = cashRegisterRepository.findById(id);
         if (existing.isPresent()) {
             return existing.get();
@@ -108,13 +115,28 @@ public class CashRegisterService {
 
     /**
      * Calculate aggregated totals for the given date (and optional type filter).
+     * NOTE: USD register transactions are EXCLUDED from the totals.
      */
     public CashRegisterDailyTotalsDTO getDailyTotals(LocalDate date, CashRegister.CashRegisterType type) {
-        // reuse list logic to avoid duplication
-        List<CashRegisterTransactionDTO> list = listTransactionsByDate(date, type);
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = LocalDateTime.of(date, LocalTime.MAX);
+        List<CashRegisterTransaction> transactions;
+        
+        // If no type specified, get transactions from all registers except USD
+        if (type == null) {
+            transactions = transactionRepository.findByDateTimeBetweenAndRegisterTypeNotOrderByDateTimeAsc(start, end, CashRegister.CashRegisterType.USD);
+        } else {
+            // If USD type is requested, return 0 totals (USD is excluded)
+            if (type == CashRegister.CashRegisterType.USD) {
+                return new CashRegisterDailyTotalsDTO(0.0, 0.0);
+            }
+            // Otherwise, get transactions for the specified type
+            transactions = transactionRepository.findByDateTimeBetweenAndRegisterTypeOrderByDateTimeAsc(start, end, type);
+        }
+        
         double inTotal = 0.0;
         double outTotal = 0.0;
-        for (CashRegisterTransactionDTO t : list) {
+        for (CashRegisterTransaction t : transactions) {
             if (t.getType() == CashRegisterTransaction.TransactionType.IN) {
                 inTotal += t.getAmount() != null ? t.getAmount() : 0;
             } else if (t.getType() == CashRegisterTransaction.TransactionType.OUT) {

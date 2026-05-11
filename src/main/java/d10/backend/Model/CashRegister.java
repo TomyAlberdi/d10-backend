@@ -1,11 +1,12 @@
 package d10.backend.Model;
 
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
 
 @Getter
 @Setter
@@ -16,6 +17,7 @@ public class CashRegister {
 
     public static final String PAPER_CASH_REGISTER_ID = "PAPER_CASH_REGISTER";
     public static final String DIGITAL_CASH_REGISTER_ID = "DIGITAL_CASH_REGISTER";
+    public static final String USD_CASH_REGISTER_ID = "USD_CASH_REGISTER";
 
     @Id
     private String id;
@@ -25,7 +27,7 @@ public class CashRegister {
     private CashRegisterType type;
 
     public enum CashRegisterType {
-        PAPER, DIGITAL
+        PAPER, DIGITAL, USD
     }
 
 }
