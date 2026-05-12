@@ -14,7 +14,7 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOrigins("https://localhost:5173", "http://192.168.0.227:5173", "https://www.d10-admin.online")
+                        .allowedOrigins("https://localhost:5173", "http://192.168.0.227:5173", "https://www.d10-admin.online", "https://d10-admin.online", "https://www.d10-tandil-admin.online", "https://d10-tandil-admin.online")
                         .allowedMethods("*");
             }
         };
