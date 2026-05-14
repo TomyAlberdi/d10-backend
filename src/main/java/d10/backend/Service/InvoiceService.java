@@ -1,5 +1,6 @@
 package d10.backend.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,7 @@ import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
+import d10.backend.Model.ProductStockRecord;
 import d10.backend.Repository.InvoiceRepository;
 import lombok.AllArgsConstructor;
 
@@ -67,6 +69,24 @@ public class InvoiceService {
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = findById(id);
+        boolean restoredStockForCancellation = false;
+        if (Boolean.TRUE.equals(invoice.getStockDecreased()) && createInvoiceDTO.getStatus() == Invoice.Status.CANCELADO) {
+            if (invoice.getProducts() != null) {
+                for (InvoiceProduct ip : invoice.getProducts()) {
+                    int qty = ip.getSaleUnitQuantity() != null ? ip.getSaleUnitQuantity() : 0;
+                    if (qty <= 0) {
+                        continue;
+                    }
+                    ProductStockRecord stockRecord = new ProductStockRecord();
+                    stockRecord.setType(ProductStockRecord.RecordType.IN);
+                    stockRecord.setQuantity(qty);
+                    stockRecord.setDate(invoice.getDate() != null ? invoice.getDate() : LocalDate.now());
+                    productService.updateStock(ip.getId(), stockRecord);
+                }
+            }
+            invoice.setStockDecreased(false);
+            restoredStockForCancellation = true;
+        }
         boolean shouldUpdateStock = !invoice.getStockDecreased() && ((createInvoiceDTO.getStockDecreased().equals(true)) || (createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO));
         if (shouldUpdateStock) {
             for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
@@ -84,6 +104,9 @@ public class InvoiceService {
             addPaymentToCashRegister(invoice);
         } */
         InvoiceMapper.updateFromDTO(invoice, createInvoiceDTO);
+        if (restoredStockForCancellation) {
+            invoice.setStockDecreased(false);
+        }
         invoiceRepository.save(invoice);
         return invoice;
     }
