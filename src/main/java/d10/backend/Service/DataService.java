@@ -15,11 +15,9 @@ import d10.backend.DTO.Product.BestSellingProductDTO;
 import d10.backend.DTO.Product.TopSellingProductDTO;
 import d10.backend.DTO.SortByEnum;
 import d10.backend.DTO.TimeSpanEnum;
-import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
 import d10.backend.Model.Product;
-import d10.backend.Repository.CashRegisterTransactionRepository;
 import d10.backend.Repository.InvoiceRepository;
 import d10.backend.Repository.ProductRepository;
 import lombok.AllArgsConstructor;
@@ -28,7 +26,6 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor
 public class DataService {
 
-    private final CashRegisterTransactionRepository cashRegisterTransactionRepository;
     private final InvoiceRepository invoiceRepository;
     private final ProductRepository productRepository;
 
@@ -37,17 +34,19 @@ public class DataService {
      *
      * @param year the year to get sales data for
      * @return list of monthly summaries with income = 0 for months without
-     * transactions
+     * paid or delivered invoices
      */
     public List<MonthlySummaryRecordDTO> getYearlySalesData(Integer year) {
-        // Create date range for the entire year
-        java.time.LocalDateTime startDateTime = java.time.LocalDateTime.of(year, 1, 1, 0, 0, 0);
-        java.time.LocalDateTime endDateTime = java.time.LocalDateTime.of(year, 12, 31, 23, 59, 59);
+        LocalDate startDate = LocalDate.of(year, 1, 1);
+        LocalDate endDate = LocalDate.of(year + 1, 1, 1);
 
-        // Get cash register transactions for the year
-        List<CashRegisterTransaction> transactions = cashRegisterTransactionRepository.findByDateTimeBetweenOrderByDateTimeAsc(startDateTime, endDateTime);
+        List<Invoice.Status> statuses = List.of(
+                Invoice.Status.PAGO,
+                Invoice.Status.ENTREGADO
+        );
 
-        // Initialize result with all months set to 0 income
+        List<Invoice> invoices = invoiceRepository.findByDateRangeAndStatus(startDate, endDate, statuses);
+
         List<MonthlySummaryRecordDTO> monthlySummaries = new ArrayList<>();
         for (int month = 1; month <= 12; month++) {
             monthlySummaries.add(new MonthlySummaryRecordDTO(
@@ -57,14 +56,13 @@ public class DataService {
             ));
         }
 
-        // Calculate monthly totals from transactions
-        for (CashRegisterTransaction transaction : transactions) {
-            if (transaction.getDateTime() == null || transaction.getAmount() == null || transaction.getType() == CashRegisterTransaction.TransactionType.OUT) {
+        for (Invoice invoice : invoices) {
+            if (invoice.getDate() == null) {
                 continue;
             }
 
-            int month = transaction.getDateTime().getMonthValue();
-            BigDecimal amount = BigDecimal.valueOf(transaction.getAmount());
+            int month = invoice.getDate().getMonthValue();
+            BigDecimal amount = BigDecimal.valueOf(invoice.getTotal());
 
             MonthlySummaryRecordDTO monthlySummary = monthlySummaries.get(month - 1);
             monthlySummary.setIncome(monthlySummary.getIncome().add(amount));
