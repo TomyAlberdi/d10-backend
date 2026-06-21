@@ -18,8 +18,8 @@ public class ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
 
-    public List<Shipment> findAll() {
-        return shipmentRepository.findAll();
+    public List<Shipment> findAll(String date) {
+        return shipmentRepository.findByShipmentDate(date);
     }
 
     public Shipment findById(String id) {

@@ -23,8 +23,8 @@ public class ShipmentController {
     private final ShipmentService shipmentService;
 
     @GetMapping
-    public ResponseEntity<?> getAll() {
-        return ResponseEntity.ok(shipmentService.findAll());
+    public ResponseEntity<?> getAll(@RequestParam String date) {
+        return ResponseEntity.ok(shipmentService.findAll(date));
     }
 
     @GetMapping("/{id}")

@@ -17,9 +17,10 @@ public class ShipmentMapper {
         shipment.setCity(dto.getCity());
         shipment.setPhone(dto.getPhone());
         shipment.setInvoice(dto.getInvoice());
-        shipment.setPartialAmount(dto.getPartialAmount());
         shipment.setFinalAmount(dto.getFinalAmount());
         shipment.setDetails(dto.getDetails());
+        shipment.setClaim(dto.isClaim());
+        shipment.setShipmentDate(dto.getShipmentDate());
     }
 
 }

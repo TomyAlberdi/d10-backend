@@ -22,8 +22,9 @@ public class Shipment {
     private String city;
     private String phone;
     private String invoice;
-    private Double partialAmount;
     private Double finalAmount;
     private String details;
+    private boolean claim;
+    private String shipmentDate;
 
 }
