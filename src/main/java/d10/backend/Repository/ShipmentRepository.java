@@ -9,5 +9,5 @@ import d10.backend.Model.Shipment;
 
 @Repository
 public interface ShipmentRepository extends MongoRepository<Shipment, String> {
-    List<Shipment> findByClientNameContainingIgnoreCaseOrBillNumberContainingIgnoreCase(String clientName, String billNumber);
+    List<Shipment> findByClientNameContainingIgnoreCaseOrInvoiceContainingIgnoreCase(String clientName, String invoice);
 }

@@ -18,6 +18,10 @@ public class ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
 
+    public List<Shipment> findAll() {
+        return shipmentRepository.findAll();
+    }
+
     public Shipment findById(String id) {
         Optional<Shipment> shipmentSearch = shipmentRepository.findById(id);
         if (shipmentSearch.isEmpty()) {
@@ -43,7 +47,7 @@ public class ShipmentService {
         if (q == null) {
             return java.util.Collections.emptyList();
         }
-        return shipmentRepository.findByClientNameContainingIgnoreCaseOrBillNumberContainingIgnoreCase(q, q);
+        return shipmentRepository.findByClientNameContainingIgnoreCaseOrInvoiceContainingIgnoreCase(q, q);
     }
 
     public void deleteShipment(String id) {

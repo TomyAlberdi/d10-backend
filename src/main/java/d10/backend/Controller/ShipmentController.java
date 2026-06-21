@@ -22,6 +22,11 @@ public class ShipmentController {
 
     private final ShipmentService shipmentService;
 
+    @GetMapping
+    public ResponseEntity<?> getAll() {
+        return ResponseEntity.ok(shipmentService.findAll());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
         return ResponseEntity.ok(shipmentService.findById(id));

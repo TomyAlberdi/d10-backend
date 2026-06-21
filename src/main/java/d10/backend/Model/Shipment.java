@@ -21,8 +21,9 @@ public class Shipment {
     private String address;
     private String city;
     private String phone;
-    private String billNumber;
-    private Double totalAmount;
+    private String invoice;
+    private Double partialAmount;
+    private Double finalAmount;
     private String details;
 
 }
