@@ -13,4 +13,5 @@ public class PackItemDTO {
     private String productId;
     private String productName;
     private Double quantity;
+    private Double priceBySaleUnit;
 }

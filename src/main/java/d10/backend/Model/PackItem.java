@@ -13,4 +13,5 @@ public class PackItem {
     private String productId;
     private String productName;
     private Double quantity;
+    private Double priceBySaleUnit;
 }

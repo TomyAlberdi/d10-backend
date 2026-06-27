@@ -28,7 +28,7 @@ public class PackMapper {
     private static List<PackItem> mapItems(List<PackItemDTO> dtos) {
         if (dtos == null) return List.of();
         return dtos.stream()
-                .map(dto -> new PackItem(dto.getProductId(), dto.getProductName(), dto.getQuantity()))
+                .map(dto -> new PackItem(dto.getProductId(), dto.getProductName(), dto.getQuantity(), dto.getPriceBySaleUnit()))
                 .toList();
     }
 }
