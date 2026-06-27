@@ -118,7 +118,7 @@ public class InvoiceService {
 
     public List<Invoice> searchInvoices(String q) {
         if (q == null) {
-            return invoiceRepository.findTop15ByOrderByDateDescInvoiceNumberDesc();
+            return invoiceRepository.findTop25ByOrderByDateDescInvoiceNumberDesc();
         }
         return invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
     }
@@ -126,7 +126,7 @@ public class InvoiceService {
     public List<Invoice> searchInvoices(String q, Invoice.Status status) {
         if (q == null || q.trim().isEmpty()) {
             if (status == null) {
-                return invoiceRepository.findTop15ByOrderByDateDescInvoiceNumberDesc();
+                return invoiceRepository.findTop25ByOrderByDateDescInvoiceNumberDesc();
             } else {
                 return invoiceRepository.findByStatusOrderByDateDescInvoiceNumberDesc(status);
             }
