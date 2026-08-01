@@ -14,6 +14,7 @@ import d10.backend.DTO.Product.CreateProductDTO;
 import d10.backend.Exception.InsufficientStockException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProductMapper;
+import d10.backend.Mapper.StockLogMapper;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
 import d10.backend.Model.ProductStockRecord;
@@ -27,6 +28,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductPaginationRepository productPaginationRepository;
+    private final StockLogService stockLogService;
 
     public Page<Product> getPaginatedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -95,15 +97,23 @@ public class ProductService {
     }
 
     public Product updateStockDecrease(String productId, int quantity, LocalDate date) {
+        return updateStockDecrease(productId, quantity, date, null);
+    }
+
+    public Product updateStockDecrease(String productId, int quantity, LocalDate date, String detail) {
         findById(productId);
         ProductStockRecord stockRecord = new ProductStockRecord();
         stockRecord.setType(ProductStockRecord.RecordType.OUT);
         stockRecord.setQuantity(quantity);
         stockRecord.setDate(date != null ? date : LocalDate.now());
-        return updateStock(productId, stockRecord);
+        return updateStock(productId, stockRecord, detail);
     }
 
     public Product updateStock(String id, ProductStockRecord stockRecord) {
+        return updateStock(id, stockRecord, null);
+    }
+
+    public Product updateStock(String id, ProductStockRecord stockRecord, String detail) {
         Product product = findById(id);
         ProductStock stock = product.getStock();
         if (stock == null) {
@@ -131,9 +141,16 @@ public class ProductService {
         if (stockRecord.getDate() == null) {
             stockRecord.setDate(LocalDate.now());
         }
-        // Add record to record list
+        // Add record to record list (legacy per product history, kept until the data migration)
         stock.getRecordList().add(stockRecord);
         productRepository.save(product);
+        // Register the movement in the document based stock log
+        stockLogService.registerMovement(
+                product,
+                StockLogMapper.toStockLogType(stockRecord.getType()),
+                stockRecord.getQuantity(),
+                detail,
+                stockRecord.getDate());
         return product;
     }
 

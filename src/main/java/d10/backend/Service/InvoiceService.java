@@ -56,7 +56,7 @@ public class InvoiceService {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
             }
             for (InvoiceProduct ip : invoice.getProducts()) {
-                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate());
+                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
             invoice.setStockDecreased(true);
         }
@@ -81,7 +81,7 @@ public class InvoiceService {
                     stockRecord.setType(ProductStockRecord.RecordType.IN);
                     stockRecord.setQuantity(qty);
                     stockRecord.setDate(invoice.getDate() != null ? invoice.getDate() : LocalDate.now());
-                    productService.updateStock(ip.getId(), stockRecord);
+                    productService.updateStock(ip.getId(), stockRecord, cancelledSaleStockDetail(invoice));
                 }
             }
             invoice.setStockDecreased(false);
@@ -93,7 +93,7 @@ public class InvoiceService {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
             }
             for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
-                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate());
+                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
             invoice.setStockDecreased(true);
         }
@@ -156,7 +156,7 @@ public class InvoiceService {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
             }
             for (InvoiceProduct ip : invoice.getProducts()) {
-                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate());
+                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
             invoice.setStockDecreased(true);
         }
@@ -168,6 +168,20 @@ public class InvoiceService {
             addPaymentToCashRegister(invoice);
         } */
         return invoice;
+    }
+
+    /**
+     * Detail stored in the stock log when an invoice takes products out of stock.
+     */
+    private String saleStockDetail(Invoice invoice) {
+        return invoice.getInvoiceNumber() != null ? "Venta #" + invoice.getInvoiceNumber() : "Venta";
+    }
+
+    /**
+     * Detail stored in the stock log when a cancelled invoice gives its products back.
+     */
+    private String cancelledSaleStockDetail(Invoice invoice) {
+        return invoice.getInvoiceNumber() != null ? "Cancelación venta #" + invoice.getInvoiceNumber() : "Cancelación de venta";
     }
 
     private void addPaymentToCashRegister(Invoice invoice) {
