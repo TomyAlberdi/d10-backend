@@ -25,6 +25,11 @@ public class InvoiceService {
     private final ProductService productService;
     private final CashRegisterService cashRegisterService;
 
+    /**
+     * Tolerance used when comparing amounts: a balance under a cent is paid.
+     */
+    private static final double PAYMENT_TOLERANCE = 0.01;
+
     private String generateNextInvoiceNumber() {
         Optional<Invoice> lastInvoice = invoiceRepository.findTopByOrderByInvoiceNumberDesc();
         int nextNum = 1;
@@ -59,6 +64,7 @@ public class InvoiceService {
             }
             invoice.setStockDecreased(true);
         }
+        applyDebtStatus(invoice);
         invoiceRepository.save(invoice);
         /*         if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
@@ -106,6 +112,7 @@ public class InvoiceService {
         if (restoredStockForCancellation) {
             invoice.setStockDecreased(false);
         }
+        applyDebtStatus(invoice);
         invoiceRepository.save(invoice);
         return invoice;
     }
@@ -160,6 +167,7 @@ public class InvoiceService {
             invoice.setStockDecreased(true);
         }
         invoice.setStatus(newStatus);
+        applyDebtStatus(invoice);
         invoiceRepository.save(invoice);
         /*         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
         boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
@@ -167,6 +175,23 @@ public class InvoiceService {
             addPaymentToCashRegister(invoice);
         } */
         return invoice;
+    }
+
+    /**
+     * A sale whose products already left the stock and whose payment does not
+     * cover the total is a debt, no matter which status was requested.
+     * Cancelled sales keep their status: they give their stock back instead of
+     * being collected.
+     */
+    private void applyDebtStatus(Invoice invoice) {
+        if (invoice.getStatus() == Invoice.Status.CANCELADO || !Boolean.TRUE.equals(invoice.getStockDecreased())) {
+            return;
+        }
+        double total = invoice.getTotal() != null ? invoice.getTotal() : 0.0;
+        double paid = invoice.getPartialPayment() != null ? invoice.getPartialPayment() : 0.0;
+        if (total - paid >= PAYMENT_TOLERANCE) {
+            invoice.setStatus(Invoice.Status.DEUDA);
+        }
     }
 
     /**

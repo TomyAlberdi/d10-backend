@@ -3,9 +3,11 @@ package d10.backend.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -28,6 +30,15 @@ public class DataService {
 
     private final InvoiceRepository invoiceRepository;
     private final ProductRepository productRepository;
+
+    /**
+     * Statuses left out of the sales reports: cancelled sales never happened and
+     * debts are not collected income yet.
+     */
+    private static final Set<Invoice.Status> NON_REVENUE_STATUSES = EnumSet.of(
+            Invoice.Status.CANCELADO,
+            Invoice.Status.DEUDA
+    );
 
     /**
      * Get yearly sales data with monthly summaries
@@ -242,7 +253,7 @@ public class DataService {
         // Filter invoices by date and status
         List<Invoice> filteredInvoices = invoices.stream()
                 .filter(i -> i.getDate() != null && i.getDate().isAfter(startDate.minusDays(1)))
-                .filter(i -> i.getStatus() != Invoice.Status.CANCELADO)
+                .filter(i -> !NON_REVENUE_STATUSES.contains(i.getStatus()))
                 .collect(Collectors.toList());
 
         // Map to store product stats: key = product id, value = [salesAmount, totalIncome]
@@ -318,7 +329,7 @@ public class DataService {
         // Filter invoices by date and status
         List<Invoice> filteredInvoices = invoices.stream()
                 .filter(i -> i.getDate() != null && i.getDate().isAfter(startDate.minusDays(1)))
-                .filter(i -> i.getStatus() != Invoice.Status.CANCELADO)
+                .filter(i -> !NON_REVENUE_STATUSES.contains(i.getStatus()))
                 .collect(Collectors.toList());
 
         // Map to store product stats: key = product id, value = [salesAmount, totalIncome]

@@ -34,7 +34,7 @@ public class Invoice {
     private PaymentMethod paymentMethod;
 
     public enum Status {
-        PENDIENTE, PAGO, ENVIADO, ENTREGADO, CANCELADO
+        PENDIENTE, PAGO, DEUDA, ENVIADO, ENTREGADO, CANCELADO
     }
 
     public enum PaymentMethod {
