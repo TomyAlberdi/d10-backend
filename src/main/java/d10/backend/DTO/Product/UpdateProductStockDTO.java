@@ -2,7 +2,7 @@ package d10.backend.DTO.Product;
 
 import java.time.LocalDate;
 
-import d10.backend.Model.ProductStockRecord;
+import d10.backend.Model.StockLog;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,7 +18,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class UpdateProductStockDTO {
 
-    private ProductStockRecord.RecordType type;
+    private StockLog.StockLogType type;
 
     private Integer quantity;
 

@@ -2,7 +2,6 @@ package d10.backend.Mapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 
 import d10.backend.DTO.Product.CreateProductDTO;
 import d10.backend.Model.Product;
@@ -13,7 +12,7 @@ public class ProductMapper {
     public static Product toEntity(CreateProductDTO dto) {
         Product product = new Product();
         // Initialize product stock
-        ProductStock stock = new ProductStock(0,0.0, new ArrayList<>());
+        ProductStock stock = new ProductStock(0, 0.0);
         product.setStock(stock);
         // Calculate Commercial Fields
         setCommercialProductFields(product, dto);

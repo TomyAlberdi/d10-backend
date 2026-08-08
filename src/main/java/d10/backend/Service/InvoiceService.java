@@ -14,7 +14,6 @@ import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
-import d10.backend.Model.ProductStockRecord;
 import d10.backend.Repository.InvoiceRepository;
 import lombok.AllArgsConstructor;
 
@@ -77,11 +76,11 @@ public class InvoiceService {
                     if (qty <= 0) {
                         continue;
                     }
-                    ProductStockRecord stockRecord = new ProductStockRecord();
-                    stockRecord.setType(ProductStockRecord.RecordType.IN);
-                    stockRecord.setQuantity(qty);
-                    stockRecord.setDate(invoice.getDate() != null ? invoice.getDate() : LocalDate.now());
-                    productService.updateStock(ip.getId(), stockRecord, cancelledSaleStockDetail(invoice));
+                    productService.updateStockIncrease(
+                            ip.getId(),
+                            qty,
+                            invoice.getDate() != null ? invoice.getDate() : LocalDate.now(),
+                            cancelledSaleStockDetail(invoice));
                 }
             }
             invoice.setStockDecreased(false);

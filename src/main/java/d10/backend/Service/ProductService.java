@@ -14,10 +14,9 @@ import d10.backend.DTO.Product.CreateProductDTO;
 import d10.backend.Exception.InsufficientStockException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProductMapper;
-import d10.backend.Mapper.StockLogMapper;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
-import d10.backend.Model.ProductStockRecord;
+import d10.backend.Model.StockLog;
 import d10.backend.Repository.ProductPaginationRepository;
 import d10.backend.Repository.ProductRepository;
 import lombok.AllArgsConstructor;
@@ -96,61 +95,38 @@ public class ProductService {
         }
     }
 
-    public Product updateStockDecrease(String productId, int quantity, LocalDate date) {
-        return updateStockDecrease(productId, quantity, date, null);
-    }
-
     public Product updateStockDecrease(String productId, int quantity, LocalDate date, String detail) {
-        findById(productId);
-        ProductStockRecord stockRecord = new ProductStockRecord();
-        stockRecord.setType(ProductStockRecord.RecordType.OUT);
-        stockRecord.setQuantity(quantity);
-        stockRecord.setDate(date != null ? date : LocalDate.now());
-        return updateStock(productId, stockRecord, detail);
+        return updateStock(productId, StockLog.StockLogType.OUT, quantity, date, detail);
     }
 
-    public Product updateStock(String id, ProductStockRecord stockRecord) {
-        return updateStock(id, stockRecord, null);
+    public Product updateStockIncrease(String productId, int quantity, LocalDate date, String detail) {
+        return updateStock(productId, StockLog.StockLogType.IN, quantity, date, detail);
     }
 
-    public Product updateStock(String id, ProductStockRecord stockRecord, String detail) {
+    public Product updateStock(String id, StockLog.StockLogType type, Integer quantity, LocalDate date, String detail) {
         Product product = findById(id);
         ProductStock stock = product.getStock();
         if (stock == null) {
-            stock = new ProductStock();
-            stock.setQuantity(0);
-            stock.setMeasureUnitEquivalent(0.0);
-            stock.setRecordList(new ArrayList<>());
+            stock = new ProductStock(0, 0.0);
             product.setStock(stock);
         }
-        // Update quantity based on record type
-        if (stockRecord.getType() == ProductStockRecord.RecordType.IN) {
-            stock.setQuantity(stock.getQuantity() + stockRecord.getQuantity());
-        } else if (stockRecord.getType() == ProductStockRecord.RecordType.OUT) {
-            if (stock.getQuantity() < stockRecord.getQuantity()) {
-                throw new InsufficientStockException("Stock insuficiente. Cantidad disponible: " + stock.getQuantity() + ", cantidad solicitada: " + stockRecord.getQuantity());
+        // Update quantity based on movement type
+        if (type == StockLog.StockLogType.IN) {
+            stock.setQuantity(stock.getQuantity() + quantity);
+        } else if (type == StockLog.StockLogType.OUT) {
+            if (stock.getQuantity() < quantity) {
+                throw new InsufficientStockException("Stock insuficiente. Cantidad disponible: " + stock.getQuantity() + ", cantidad solicitada: " + quantity);
             }
-            stock.setQuantity(stock.getQuantity() - stockRecord.getQuantity());
+            stock.setQuantity(stock.getQuantity() - quantity);
         }
         // Update measure unit equivalent
         if (stock.getQuantity() > 0) {
             Double equivalent = stock.getQuantity() * product.getMeasurePerSaleUnit();
             stock.setMeasureUnitEquivalent(equivalent);
         }
-        // Set the date if not provided
-        if (stockRecord.getDate() == null) {
-            stockRecord.setDate(LocalDate.now());
-        }
-        // Add record to record list (legacy per product history, kept until the data migration)
-        stock.getRecordList().add(stockRecord);
         productRepository.save(product);
         // Register the movement in the document based stock log
-        stockLogService.registerMovement(
-                product,
-                StockLogMapper.toStockLogType(stockRecord.getType()),
-                stockRecord.getQuantity(),
-                detail,
-                stockRecord.getDate());
+        stockLogService.registerMovement(product, type, quantity, detail, date != null ? date : LocalDate.now());
         return product;
     }
 

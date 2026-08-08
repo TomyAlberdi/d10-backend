@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.Product.CreateProductDTO;
 import d10.backend.DTO.Product.UpdateProductStockDTO;
-import d10.backend.Model.ProductStockRecord;
 import d10.backend.Service.ProductService;
 import lombok.RequiredArgsConstructor;
 
@@ -84,11 +83,12 @@ public class ProductController {
     public ResponseEntity<?> updateStock(
             @PathVariable String id,
             @RequestBody UpdateProductStockDTO stockUpdate) {
-        ProductStockRecord stockRecord = new ProductStockRecord(
+        return ResponseEntity.ok(productService.updateStock(
+                id,
                 stockUpdate.getType(),
                 stockUpdate.getQuantity(),
-                stockUpdate.getDate());
-        return ResponseEntity.ok(productService.updateStock(id, stockRecord, stockUpdate.getDetail()));
+                stockUpdate.getDate(),
+                stockUpdate.getDetail()));
     }
 
     @PatchMapping("/update-price")

@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 import d10.backend.DTO.StockLog.StockLogDTO;
 import d10.backend.Model.Product;
-import d10.backend.Model.ProductStockRecord;
 import d10.backend.Model.StockLog;
 
 public class StockLogMapper {
@@ -43,16 +42,6 @@ public class StockLogMapper {
                 stockLog.getType(),
                 stockLog.getDatetime(),
                 stockLog.getDetail());
-    }
-
-    /**
-     * Bridges the legacy per product record type with the document based log type.
-     */
-    public static StockLog.StockLogType toStockLogType(ProductStockRecord.RecordType recordType) {
-        if (recordType == ProductStockRecord.RecordType.IN) {
-            return StockLog.StockLogType.IN;
-        }
-        return StockLog.StockLogType.OUT;
     }
 
     private static Double measureEquivalent(Product product, Integer saleUnitQuantity) {
