@@ -38,7 +38,7 @@ public class Invoice {
     }
 
     public enum PaymentMethod {
-        CASH, DIGITAL
+        CASH, DIGITAL, USD
     }
 
 }

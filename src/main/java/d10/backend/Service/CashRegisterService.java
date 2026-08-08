@@ -33,14 +33,13 @@ public class CashRegisterService {
     private final CashRegisterTransactionRepository transactionRepository;
 
     private CashRegister getOrCreateRegister(CashRegister.CashRegisterType type) {
-        String id;
-        if (type == CashRegister.CashRegisterType.PAPER) {
-            id = CashRegister.PAPER_CASH_REGISTER_ID;
-        } else if (type == CashRegister.CashRegisterType.DIGITAL) {
-            id = CashRegister.DIGITAL_CASH_REGISTER_ID;
-        } else {
-            id = CashRegister.USD_CASH_REGISTER_ID;
-        }
+        // Exhaustive switch: a new register type fails to compile until it is
+        // given its own document id, instead of silently reusing the USD one.
+        String id = switch (type) {
+            case PAPER -> CashRegister.PAPER_CASH_REGISTER_ID;
+            case DIGITAL -> CashRegister.DIGITAL_CASH_REGISTER_ID;
+            case USD -> CashRegister.USD_CASH_REGISTER_ID;
+        };
         Optional<CashRegister> existing = cashRegisterRepository.findById(id);
         if (existing.isPresent()) {
             return existing.get();

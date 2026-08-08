@@ -184,7 +184,16 @@ public class InvoiceService {
     }
 
     private void addPaymentToCashRegister(Invoice invoice) {
-        CashRegister.CashRegisterType registerType = invoice.getPaymentMethod() == Invoice.PaymentMethod.CASH ? CashRegister.CashRegisterType.PAPER : CashRegister.CashRegisterType.DIGITAL;
+        if (invoice.getPaymentMethod() == null) {
+            return;
+        }
+        // Exhaustive switch: a new payment method fails to compile until it is
+        // mapped to the register it feeds.
+        CashRegister.CashRegisterType registerType = switch (invoice.getPaymentMethod()) {
+            case CASH -> CashRegister.CashRegisterType.PAPER;
+            case DIGITAL -> CashRegister.CashRegisterType.DIGITAL;
+            case USD -> CashRegister.CashRegisterType.USD;
+        };
         CreateCashRegisterTransactionDTO dto = new CreateCashRegisterTransactionDTO();
         dto.setAmount(invoice.getTotal());
         dto.setType(CashRegisterTransaction.TransactionType.IN);
