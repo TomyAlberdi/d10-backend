@@ -2,400 +2,466 @@ package d10.backend.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.EnumSet;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.bson.Document;
+import org.bson.types.ObjectId;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.ArithmeticOperators;
+import org.springframework.data.mongodb.core.aggregation.ArrayOperators;
+import org.springframework.data.mongodb.core.aggregation.ConditionalOperators;
+import org.springframework.data.mongodb.core.aggregation.DateOperators;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 
+import d10.backend.DTO.Data.AvailableYearDTO;
+import d10.backend.DTO.Data.MonthlyCashFlowDTO;
+import d10.backend.DTO.Data.TopClientDTO;
 import d10.backend.DTO.Invoice.MonthlySummaryRecordDTO;
 import d10.backend.DTO.Product.BestSellingProductDTO;
 import d10.backend.DTO.Product.TopSellingProductDTO;
+import d10.backend.DTO.RevenueBasisEnum;
 import d10.backend.DTO.SortByEnum;
 import d10.backend.DTO.TimeSpanEnum;
-import d10.backend.Model.Invoice;
-import d10.backend.Model.InvoiceProduct;
+import d10.backend.Model.CashRegister;
+import d10.backend.Model.Client;
 import d10.backend.Model.Product;
-import d10.backend.Repository.InvoiceRepository;
 import d10.backend.Repository.ProductRepository;
 import lombok.AllArgsConstructor;
 
+/**
+ * Read side of the application: every method here answers one chart.
+ *
+ * All the heavy grouping runs as a MongoDB aggregation pipeline. The previous
+ * implementation pulled whole collections into memory with findAll() and then
+ * called productRepository.findById() inside the line item loop, so a single
+ * category ranking cost one round trip per line of every invoice ever issued.
+ * What is left in Java is only the work the pipeline cannot reach: the product
+ * documents themselves, fetched once with findAllById.
+ *
+ * Field names are written as they are stored, not as they are declared in the
+ * model: the id of an embedded object is persisted as _id, so invoice lines
+ * are matched on products._id and clients on client._id.
+ */
 @Service
 @AllArgsConstructor
 public class DataService {
 
-    private final InvoiceRepository invoiceRepository;
     private final ProductRepository productRepository;
+    private final MongoTemplate mongoTemplate;
+
+    private static final String INVOICES = "invoices";
+    private static final String TRANSACTIONS = "cash_register_transactions";
+
+    /** Surface below which a product counts as fully cost-snapshotted. */
+    private static final double SURFACE_TOLERANCE = 0.0001;
+
+    // ---------------------------------------------------------------------
+    // Sales
+    // ---------------------------------------------------------------------
 
     /**
-     * Statuses left out of the sales reports: cancelled sales never happened and
-     * debts are not collected income yet.
-     */
-    private static final Set<Invoice.Status> NON_REVENUE_STATUSES = EnumSet.of(
-            Invoice.Status.CANCELADO,
-            Invoice.Status.DEUDA
-    );
-
-    /**
-     * Get yearly sales data with monthly summaries
+     * Monthly income for a year, with income = 0 for months without sales.
      *
-     * @param year the year to get sales data for
-     * @return list of monthly summaries with income = 0 for months without
-     * paid or delivered invoices
+     * @param year the year to summarise
+     * @param basis which invoice statuses count as revenue
      */
-    public List<MonthlySummaryRecordDTO> getYearlySalesData(Integer year) {
+    public List<MonthlySummaryRecordDTO> getYearlySalesData(Integer year, RevenueBasisEnum basis) {
         LocalDate startDate = LocalDate.of(year, 1, 1);
         LocalDate endDate = LocalDate.of(year + 1, 1, 1);
 
-        List<Invoice.Status> statuses = List.of(
-                Invoice.Status.PAGO,
-                Invoice.Status.ENTREGADO
-        );
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(revenueCriteria(startDate, endDate, basis)),
+                Aggregation.project()
+                        .and(DateOperators.Month.monthOf("date")).as("month")
+                        .and(ConditionalOperators.ifNull("total").then(0.0)).as("total"),
+                Aggregation.group("month").sum("total").as("income"));
 
-        List<Invoice> invoices = invoiceRepository.findByDateRangeAndStatus(startDate, endDate, statuses);
+        Map<Integer, BigDecimal> incomeByMonth = new HashMap<>();
+        for (Document row : run(aggregation, INVOICES)) {
+            incomeByMonth.put(asInt(row.get("_id")), BigDecimal.valueOf(asDouble(row.get("income"))));
+        }
 
         List<MonthlySummaryRecordDTO> monthlySummaries = new ArrayList<>();
         for (int month = 1; month <= 12; month++) {
             monthlySummaries.add(new MonthlySummaryRecordDTO(
                     month,
                     year,
-                    BigDecimal.ZERO
-            ));
+                    incomeByMonth.getOrDefault(month, BigDecimal.ZERO)));
         }
-
-        for (Invoice invoice : invoices) {
-            if (invoice.getDate() == null) {
-                continue;
-            }
-
-            int month = invoice.getDate().getMonthValue();
-            BigDecimal amount = BigDecimal.valueOf(invoice.getTotal());
-
-            MonthlySummaryRecordDTO monthlySummary = monthlySummaries.get(month - 1);
-            monthlySummary.setIncome(monthlySummary.getIncome().add(amount));
-        }
-
         return monthlySummaries;
     }
 
     /**
-     * Get the 15 best selling products for a given time span and sort criteria
-     *
-     * @param timeSpan the time span to filter invoices (LAST_MONTH, LAST_YEAR,
-     * or ALL_TIME)
-     * @param sortBy the field to sort by (SALES_AMOUNT, GROSS_INCOME, or
-     * NET_INCOME)
-     * @return list of up to 15 best selling products with sales metrics
+     * Years that actually contain invoices, most recent first.
      */
-    public List<BestSellingProductDTO> getBestSellingProducts(TimeSpanEnum timeSpan, SortByEnum sortBy) {
-        // Determine date range based on timeSpan
+    public List<AvailableYearDTO> getAvailableYears() {
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("date").ne(null)),
+                Aggregation.project().and(DateOperators.Year.yearOf("date")).as("year"),
+                Aggregation.group("year").count().as("invoiceCount"),
+                Aggregation.sort(Sort.Direction.DESC, "_id"));
+
+        return run(aggregation, INVOICES).stream()
+                .map(row -> new AvailableYearDTO(asInt(row.get("_id")), asInt(row.get("invoiceCount"))))
+                .toList();
+    }
+
+    // ---------------------------------------------------------------------
+    // Product rankings
+    // ---------------------------------------------------------------------
+
+    /**
+     * The 15 best selling products for a time span and sort criteria.
+     */
+    public List<BestSellingProductDTO> getBestSellingProducts(TimeSpanEnum timeSpan, SortByEnum sortBy,
+            RevenueBasisEnum basis) {
+        return buildProductSales(timeSpan, basis).stream()
+                .sorted(comparator(sortBy))
+                .limit(15)
+                .toList();
+    }
+
+    /**
+     * The 5 best selling products of a category.
+     */
+    public List<TopSellingProductDTO> getTop5ByCategory(String category, SortByEnum sortBy, TimeSpanEnum timespan,
+            RevenueBasisEnum basis) {
+        return top5(idsOf(productRepository.findByCategoryIgnoreCase(category)), sortBy, timespan, basis);
+    }
+
+    /**
+     * The 5 best selling products of a subcategory.
+     */
+    public List<TopSellingProductDTO> getTop5BySubcategory(String subcategory, SortByEnum sortBy, TimeSpanEnum timespan,
+            RevenueBasisEnum basis) {
+        return top5(idsOf(productRepository.findBySubcategoryIgnoreCase(subcategory)), sortBy, timespan, basis);
+    }
+
+    private List<TopSellingProductDTO> top5(Set<String> productIds, SortByEnum sortBy, TimeSpanEnum timespan,
+            RevenueBasisEnum basis) {
+        if (productIds.isEmpty()) {
+            return List.of();
+        }
+        return buildProductSales(timespan, basis).stream()
+                .filter(dto -> productIds.contains(dto.getProduct().getId()))
+                .sorted(comparator(sortBy))
+                .limit(5)
+                .map(dto -> new TopSellingProductDTO(
+                        dto.getProduct(),
+                        dto.getInvoiceCount(),
+                        dto.getUnitsSold(),
+                        dto.getTotalIncome(),
+                        dto.getNetIncome(),
+                        dto.getCostBasisEstimated(),
+                        timespan))
+                .toList();
+    }
+
+    /**
+     * Aggregates every invoice line of the period into one row per product and
+     * joins the product documents in a single findAllById.
+     *
+     * The result is bounded by the number of products ever sold, not by the
+     * number of invoices, so sorting and slicing it in Java is cheap. Sorting
+     * could not happen in the pipeline anyway: net income needs the current
+     * product cost for the lines that predate the cost snapshot.
+     */
+    private List<BestSellingProductDTO> buildProductSales(TimeSpanEnum timeSpan, RevenueBasisEnum basis) {
         LocalDate startDate = calculateStartDate(timeSpan);
         LocalDate endDate = LocalDate.now().plusDays(1);
 
-        // Statuses to include in the query
-        List<Invoice.Status> statuses = List.of(
-                Invoice.Status.PAGO,
-                Invoice.Status.ENVIADO,
-                Invoice.Status.ENTREGADO
-        );
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(revenueCriteria(startDate, endDate, basis)),
+                Aggregation.unwind("products"),
+                Aggregation.project()
+                        .and("_id").as("invoiceId")
+                        .and("products._id").as("productId")
+                        .and(ConditionalOperators.ifNull("products.subtotal").then(0.0)).as("lineIncome")
+                        .and(ConditionalOperators.ifNull("products.saleUnitQuantity").then(0)).as("lineUnits")
+                        .and(ConditionalOperators.ifNull("products.measureUnitQuantity").then(0.0)).as("lineMeasure")
+                        .and(ConditionalOperators.ifNull("products.costByMeasureUnitAtSale").then(0.0))
+                        .as("lineCostPerMeasure"),
+                Aggregation.project("invoiceId", "productId", "lineIncome", "lineUnits", "lineMeasure")
+                        .and(ArithmeticOperators.valueOf("lineCostPerMeasure").multiplyBy("lineMeasure")).as("lineCost")
+                        .and(ConditionalOperators.when(Criteria.where("lineCostPerMeasure").gt(0))
+                                .thenValueOf("lineMeasure").otherwise(0)).as("lineMeasureWithCost"),
+                Aggregation.group("productId")
+                        .sum("lineIncome").as("totalIncome")
+                        .sum("lineUnits").as("unitsSold")
+                        .sum("lineMeasure").as("totalSurface")
+                        .sum("lineCost").as("costFromSnapshots")
+                        .sum("lineMeasureWithCost").as("surfaceWithCost")
+                        .addToSet("invoiceId").as("invoiceIds"),
+                Aggregation.project("totalIncome", "unitsSold", "totalSurface", "costFromSnapshots", "surfaceWithCost")
+                        .and("_id").as("productId")
+                        .and(ArrayOperators.Size.lengthOfArray("invoiceIds")).as("invoiceCount"));
 
-        // Get invoices for the time span with specified statuses
-        List<Invoice> invoices = invoiceRepository.findByDateRangeAndStatus(startDate, endDate, statuses);
-
-        // Create a map to aggregate product sales data
-        Map<String, ProductSalesData> productSalesMap = new HashMap<>();
-
-        for (Invoice invoice : invoices) {
-            List<InvoiceProduct> products = invoice.getProducts();
-            if (products != null) {
-                for (InvoiceProduct invoiceProduct : products) {
-                    String productId = invoiceProduct.getId();
-
-                    ProductSalesData salesData = productSalesMap.getOrDefault(productId,
-                            new ProductSalesData());
-
-                    // Increment sales amount
-                    salesData.salesAmount++;
-
-                    // Add to total surface
-                    double measureUnitQuantity = 0.0;
-                    if (invoiceProduct.getMeasureUnitQuantity() != null) {
-                        measureUnitQuantity = invoiceProduct.getMeasureUnitQuantity();
-                    }
-                    salesData.totalSurface += measureUnitQuantity;
-
-                    // Add to total income
-                    double subtotal = 0.0;
-                    if (invoiceProduct.getSubtotal() != null) {
-                        subtotal = invoiceProduct.getSubtotal();
-                    }
-                    salesData.totalIncome += subtotal;
-
-                    // Add to total sale units for net income calculation
-                    int saleUnitQuantity = 0;
-                    if (invoiceProduct.getSaleUnitQuantity() != null) {
-                        saleUnitQuantity = invoiceProduct.getSaleUnitQuantity();
-                    }
-                    salesData.totalSaleUnits += saleUnitQuantity;
-
-                    productSalesMap.put(productId, salesData);
-                }
-            }
+        List<Document> rows = run(aggregation, INVOICES);
+        if (rows.isEmpty()) {
+            return List.of();
         }
 
-        // Convert to BestSellingProductDTO and sort by the specified field
-        List<BestSellingProductDTO> bestSellingProducts = productSalesMap.entrySet().stream()
-                .map(entry -> {
-                    String productId = entry.getKey();
-                    ProductSalesData salesData = entry.getValue();
+        List<String> productIds = rows.stream()
+                .map(row -> asString(row.get("productId")))
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
 
-                    // Fetch the product from repository
-                    Product product = productRepository.findById(productId).orElse(null);
+        Map<String, Product> products = new HashMap<>();
+        productRepository.findAllById(productIds).forEach(product -> products.put(product.getId(), product));
 
-                    if (product == null) {
-                        return null;
-                    }
+        List<BestSellingProductDTO> result = new ArrayList<>();
+        for (Document row : rows) {
+            Product product = products.get(asString(row.get("productId")));
+            if (product == null) {
+                // Product deleted after the sale: a ranking that renders code,
+                // name and measure unit has nothing to show for it.
+                continue;
+            }
 
-                    // Calculate net income if cost and measure per sale unit are available
-                    Double netIncome = null;
-                    if (product.getCostByMeasureUnit() != null && product.getCostByMeasureUnit() > 0
-                            && product.getMeasurePerSaleUnit() != null && product.getMeasurePerSaleUnit() > 0) {
+            double totalIncome = asDouble(row.get("totalIncome"));
+            double totalSurface = asDouble(row.get("totalSurface"));
+            double surfaceWithCost = asDouble(row.get("surfaceWithCost"));
+            double costFromSnapshots = asDouble(row.get("costFromSnapshots"));
+            double surfaceWithoutCost = Math.max(0.0, totalSurface - surfaceWithCost);
+            boolean estimated = surfaceWithoutCost > SURFACE_TOLERANCE;
 
-                        // Cost per sale unit = costByMeasureUnit * measurePerSaleUnit
-                        Double costPerSaleUnit = product.getCostByMeasureUnit() * product.getMeasurePerSaleUnit();
-                        // Total cost = costPerSaleUnit * total quantity of sales units sold
-                        Double totalCost = salesData.totalSaleUnits * costPerSaleUnit;
-                        netIncome = salesData.totalIncome - totalCost;
-                    }
+            Double netIncome = null;
+            if (!estimated) {
+                netIncome = totalIncome - costFromSnapshots;
+            } else {
+                Double currentCost = product.getCostByMeasureUnit();
+                if (currentCost != null && currentCost > 0) {
+                    netIncome = totalIncome - (costFromSnapshots + (surfaceWithoutCost * currentCost));
+                }
+            }
 
-                    BestSellingProductDTO dto = new BestSellingProductDTO();
-                    dto.setProduct(product);
-                    dto.setSalesAmount(salesData.salesAmount);
-                    dto.setTotalSurface(salesData.totalSurface);
-                    dto.setTotalIncome(salesData.totalIncome);
-                    dto.setNetIncome(netIncome);
-
-                    return dto;
-                })
-                .filter(dto -> dto != null)
-                .sorted((a, b) -> compareBestSellingProducts(a, b, sortBy))
-                .limit(15)
-                .collect(Collectors.toList());
-
-        return bestSellingProducts;
+            BestSellingProductDTO dto = new BestSellingProductDTO();
+            dto.setProduct(product);
+            dto.setInvoiceCount(asInt(row.get("invoiceCount")));
+            dto.setUnitsSold(asInt(row.get("unitsSold")));
+            dto.setTotalSurface(totalSurface);
+            dto.setTotalIncome(totalIncome);
+            dto.setNetIncome(netIncome);
+            dto.setCostBasisEstimated(estimated);
+            result.add(dto);
+        }
+        return result;
     }
 
+    private Comparator<BestSellingProductDTO> comparator(SortByEnum sortBy) {
+        return switch (sortBy) {
+            case INVOICE_COUNT -> Comparator.comparingInt(
+                    (BestSellingProductDTO dto) -> dto.getInvoiceCount() == null ? 0 : dto.getInvoiceCount())
+                    .reversed();
+            case UNITS_SOLD -> Comparator.comparingInt(
+                    (BestSellingProductDTO dto) -> dto.getUnitsSold() == null ? 0 : dto.getUnitsSold())
+                    .reversed();
+            case GROSS_INCOME -> Comparator.comparingDouble(
+                    (BestSellingProductDTO dto) -> dto.getTotalIncome() == null ? 0.0 : dto.getTotalIncome())
+                    .reversed();
+            case NET_INCOME -> Comparator.comparingDouble(
+                    (BestSellingProductDTO dto) -> dto.getNetIncome() == null ? 0.0 : dto.getNetIncome())
+                    .reversed();
+        };
+    }
+
+    // ---------------------------------------------------------------------
+    // Cash register
+    // ---------------------------------------------------------------------
+
     /**
-     * Calculate the start date based on the time span
+     * Monthly cash in, cash out and net movement for a year.
+     *
+     * Transactions written before the registers were split carry no
+     * registerType, so they are only counted when no type filter is asked for.
+     *
+     * @param registerType optional filter; null totals every register. USD is a
+     * different currency and should not be added to the peso registers, the
+     * same rule CashRegisterService.getDailyTotals already follows.
      */
+    public List<MonthlyCashFlowDTO> getMonthlyCashFlow(Integer year, CashRegister.CashRegisterType registerType) {
+        LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
+
+        Criteria criteria = Criteria.where("dateTime").gte(toDate(start)).lt(toDate(end));
+        if (registerType != null) {
+            criteria = criteria.and("registerType").is(registerType.name());
+        }
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.project()
+                        .and(DateOperators.Month.monthOf("dateTime")).as("month")
+                        .and(ConditionalOperators.when(Criteria.where("type").is("IN"))
+                                .thenValueOf("amount").otherwise(0)).as("inAmount")
+                        .and(ConditionalOperators.when(Criteria.where("type").is("OUT"))
+                                .thenValueOf("amount").otherwise(0)).as("outAmount"),
+                Aggregation.group("month")
+                        .sum("inAmount").as("inTotal")
+                        .sum("outAmount").as("outTotal"));
+
+        Map<Integer, Document> byMonth = new HashMap<>();
+        for (Document row : run(aggregation, TRANSACTIONS)) {
+            byMonth.put(asInt(row.get("_id")), row);
+        }
+
+        List<MonthlyCashFlowDTO> months = new ArrayList<>();
+        for (int month = 1; month <= 12; month++) {
+            Document row = byMonth.get(month);
+            double inTotal = row == null ? 0.0 : asDouble(row.get("inTotal"));
+            double outTotal = row == null ? 0.0 : asDouble(row.get("outTotal"));
+            months.add(new MonthlyCashFlowDTO(month, year, inTotal, outTotal, inTotal - outTotal));
+        }
+        return months;
+    }
+
+    // ---------------------------------------------------------------------
+    // Clients
+    // ---------------------------------------------------------------------
+
+    /**
+     * Clients ranked by revenue over a period.
+     *
+     * Grouping runs on the client snapshot embedded in each invoice, so a
+     * client renamed after the sale still reports under the name that was on
+     * the invoice. Invoices with no client attached are left out.
+     *
+     * @param from inclusive, null means no lower bound
+     * @param to exclusive, null means no upper bound
+     */
+    public List<TopClientDTO> getTopClients(LocalDate from, LocalDate to, int limit, RevenueBasisEnum basis) {
+        Criteria criteria = revenueCriteria(from, to, basis).and("client").ne(null);
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.project()
+                        .and("client._id").as("clientId")
+                        .and("client.name").as("clientName")
+                        .and("client.type").as("clientType")
+                        .and("date").as("date")
+                        .and(ConditionalOperators.ifNull("total").then(0.0)).as("total"),
+                Aggregation.group("clientId")
+                        .sum("total").as("revenue")
+                        .count().as("invoiceCount")
+                        .last("clientName").as("clientName")
+                        .last("clientType").as("clientType")
+                        .max("date").as("lastPurchase"),
+                Aggregation.sort(Sort.Direction.DESC, "revenue"),
+                Aggregation.limit(limit));
+
+        List<TopClientDTO> clients = new ArrayList<>();
+        for (Document row : run(aggregation, INVOICES)) {
+            double revenue = asDouble(row.get("revenue"));
+            int invoiceCount = asInt(row.get("invoiceCount"));
+            clients.add(new TopClientDTO(
+                    asString(row.get("_id")),
+                    row.getString("clientName"),
+                    asClientType(row.get("clientType")),
+                    revenue,
+                    invoiceCount,
+                    invoiceCount == 0 ? 0.0 : revenue / invoiceCount,
+                    asLocalDate(row.get("lastPurchase"))));
+        }
+        return clients;
+    }
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+
+    /**
+     * Date range plus the status set of the requested revenue basis. Every
+     * report goes through here, which is what keeps them agreeing with each
+     * other.
+     */
+    private Criteria revenueCriteria(LocalDate startDate, LocalDate endDate, RevenueBasisEnum basis) {
+        // Starts on the status, which is always present, so an unbounded range
+        // never has to build an empty Criteria with no key.
+        Criteria criteria = Criteria.where("status").in(basis.getStatusNames());
+        if (startDate != null && endDate != null) {
+            criteria = criteria.and("date").gte(toDate(startDate)).lt(toDate(endDate));
+        } else if (startDate != null) {
+            criteria = criteria.and("date").gte(toDate(startDate));
+        } else if (endDate != null) {
+            criteria = criteria.and("date").lt(toDate(endDate));
+        }
+        return criteria;
+    }
+
     private LocalDate calculateStartDate(TimeSpanEnum timeSpan) {
         LocalDate now = LocalDate.now();
         return switch (timeSpan) {
-            case THIS_MONTH ->
-                now.withDayOfMonth(1);
-            case THIS_YEAR ->
-                now.withDayOfYear(1);
-            case ALL_TIME ->
-                LocalDate.of(1900, 1, 1); // Arbitrary old date
+            case THIS_MONTH -> now.withDayOfMonth(1);
+            case THIS_YEAR -> now.withDayOfYear(1);
+            case ALL_TIME -> LocalDate.of(1900, 1, 1);
         };
     }
 
-    /**
-     * Compare two BestSellingProductDTO objects based on the sort criteria
-     */
-    private int compareBestSellingProducts(BestSellingProductDTO a, BestSellingProductDTO b, SortByEnum sortBy) {
-        return switch (sortBy) {
-            case SALES_AMOUNT ->
-                b.getSalesAmount().compareTo(a.getSalesAmount());
-            case GROSS_INCOME -> {
-                Double aIncome = a.getTotalIncome();
-                Double bIncome = b.getTotalIncome();
-                if (aIncome == null) {
-                    aIncome = 0.0;
-                }
-                if (bIncome == null) {
-                    bIncome = 0.0;
-                }
-                yield bIncome.compareTo(aIncome);
-            }
-            case NET_INCOME -> {
-                Double aNetIncome = a.getNetIncome();
-                Double bNetIncome = b.getNetIncome();
-                if (aNetIncome == null) {
-                    aNetIncome = 0.0;
-                }
-                if (bNetIncome == null) {
-                    bNetIncome = 0.0;
-                }
-                yield bNetIncome.compareTo(aNetIncome);
-            }
-        };
+    private List<Document> run(Aggregation aggregation, String collection) {
+        return mongoTemplate.aggregate(aggregation, collection, Document.class).getMappedResults();
+    }
+
+    private Set<String> idsOf(Collection<Product> products) {
+        return products.stream().map(Product::getId).collect(Collectors.toSet());
     }
 
     /**
-     * Get top 5 best selling products by category
-     *
-     * @param category the category name to filter products
-     * @param sortBy the field to sort by (SALES_AMOUNT or GROSS_INCOME)
-     * @param timespan the time span to filter invoices (LAST_MONTH, LAST_YEAR,
-     * or ALL_TIME)
-     * @return list of up to 5 best selling products in the category with sales
-     * metrics
+     * Spring Data writes a LocalDate as the start of that day in the server
+     * zone; matching with the same conversion keeps the range aligned with
+     * what is stored.
      */
-    public List<TopSellingProductDTO> getTop5ByCategory(String category, SortByEnum sortBy, TimeSpanEnum timespan) {
-        LocalDate startDate = calculateStartDate(timespan);
-        List<Invoice> invoices = invoiceRepository.findAll();
+    private Date toDate(LocalDate date) {
+        return Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+    }
 
-        // Filter invoices by date and status
-        List<Invoice> filteredInvoices = invoices.stream()
-                .filter(i -> i.getDate() != null && i.getDate().isAfter(startDate.minusDays(1)))
-                .filter(i -> !NON_REVENUE_STATUSES.contains(i.getStatus()))
-                .collect(Collectors.toList());
+    private Date toDate(LocalDateTime dateTime) {
+        return Date.from(dateTime.atZone(ZoneId.systemDefault()).toInstant());
+    }
 
-        // Map to store product stats: key = product id, value = [salesAmount, totalIncome]
-        Map<String, Map<String, Object>> productStats = new HashMap<>();
+    private static double asDouble(Object value) {
+        return value instanceof Number number ? number.doubleValue() : 0.0;
+    }
 
-        for (Invoice invoice : filteredInvoices) {
-            if (invoice.getProducts() != null) {
-                for (InvoiceProduct invoiceProduct : invoice.getProducts()) {
-                    Product product = productRepository.findById(invoiceProduct.getId()).orElse(null);
-                    if (product == null) {
-                        continue;
-                    }
+    private static int asInt(Object value) {
+        return value instanceof Number number ? number.intValue() : 0;
+    }
 
-                    // Check if product is in the requested category
-                    if (product.getCategory() != null && product.getCategory().equalsIgnoreCase(category)) {
-                        if (!productStats.containsKey(product.getId())) {
-                            Map<String, Object> stats = new HashMap<>();
-                            stats.put("salesAmount", 0);
-                            stats.put("totalIncome", 0.0);
-                            stats.put("product", product);
-                            productStats.put(product.getId(), stats);
-                        }
-
-                        Map<String, Object> stats = productStats.get(product.getId());
-                        int currentAmount = (Integer) stats.get("salesAmount");
-                        double currentIncome = (Double) stats.get("totalIncome");
-
-                        Integer saleQuantity = invoiceProduct.getSaleUnitQuantity();
-                        Double subtotal = invoiceProduct.getSubtotal();
-
-                        stats.put("salesAmount", currentAmount + (saleQuantity != null ? saleQuantity : 0));
-                        stats.put("totalIncome", currentIncome + (subtotal != null ? subtotal : 0.0));
-                    }
-                }
-            }
+    private static String asString(Object value) {
+        if (value == null) {
+            return null;
         }
-
-        // Convert to DTOs and sort
-        List<TopSellingProductDTO> results = productStats.values().stream()
-                .map(stats -> new TopSellingProductDTO(
-                (Product) stats.get("product"),
-                (Integer) stats.get("salesAmount"),
-                (Double) stats.get("totalIncome"),
-                timespan
-        ))
-                .sorted((a, b) -> {
-                    if (sortBy == SortByEnum.SALES_AMOUNT) {
-                        return b.getSalesAmount().compareTo(a.getSalesAmount());
-                    } else { // GROSS_INCOME
-                        return b.getTotalIncome().compareTo(a.getTotalIncome());
-                    }
-                })
-                .limit(5)
-                .collect(Collectors.toList());
-
-        return results;
+        return value instanceof ObjectId objectId ? objectId.toHexString() : value.toString();
     }
 
-    /**
-     * Get top 5 best selling products by subcategory
-     *
-     * @param subcategory the subcategory name to filter products
-     * @param sortBy the field to sort by (SALES_AMOUNT or GROSS_INCOME)
-     * @param timespan the time span to filter invoices (LAST_MONTH, LAST_YEAR,
-     * or ALL_TIME)
-     * @return list of up to 5 best selling products in the subcategory with
-     * sales metrics
-     */
-    public List<TopSellingProductDTO> getTop5BySubcategory(String subcategory, SortByEnum sortBy, TimeSpanEnum timespan) {
-        LocalDate startDate = calculateStartDate(timespan);
-        List<Invoice> invoices = invoiceRepository.findAll();
+    private static LocalDate asLocalDate(Object value) {
+        return value instanceof Date date
+                ? date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                : null;
+    }
 
-        // Filter invoices by date and status
-        List<Invoice> filteredInvoices = invoices.stream()
-                .filter(i -> i.getDate() != null && i.getDate().isAfter(startDate.minusDays(1)))
-                .filter(i -> !NON_REVENUE_STATUSES.contains(i.getStatus()))
-                .collect(Collectors.toList());
-
-        // Map to store product stats: key = product id, value = [salesAmount, totalIncome]
-        Map<String, Map<String, Object>> productStats = new HashMap<>();
-
-        for (Invoice invoice : filteredInvoices) {
-            if (invoice.getProducts() != null) {
-                for (InvoiceProduct invoiceProduct : invoice.getProducts()) {
-                    Product product = productRepository.findById(invoiceProduct.getId()).orElse(null);
-                    if (product == null) {
-                        continue;
-                    }
-
-                    // Check if product is in the requested subcategory
-                    if (product.getSubcategory() != null && product.getSubcategory().equalsIgnoreCase(subcategory)) {
-                        if (!productStats.containsKey(product.getId())) {
-                            Map<String, Object> stats = new HashMap<>();
-                            stats.put("salesAmount", 0);
-                            stats.put("totalIncome", 0.0);
-                            stats.put("product", product);
-                            productStats.put(product.getId(), stats);
-                        }
-
-                        Map<String, Object> stats = productStats.get(product.getId());
-                        int currentAmount = (Integer) stats.get("salesAmount");
-                        double currentIncome = (Double) stats.get("totalIncome");
-
-                        Integer saleQuantity = invoiceProduct.getSaleUnitQuantity();
-                        Double subtotal = invoiceProduct.getSubtotal();
-
-                        stats.put("salesAmount", currentAmount + (saleQuantity != null ? saleQuantity : 0));
-                        stats.put("totalIncome", currentIncome + (subtotal != null ? subtotal : 0.0));
-                    }
-                }
-            }
+    private static Client.ClientType asClientType(Object value) {
+        if (value == null) {
+            return null;
         }
-
-        // Convert to DTOs and sort
-        List<TopSellingProductDTO> results = productStats.values().stream()
-                .map(stats -> new TopSellingProductDTO(
-                (Product) stats.get("product"),
-                (Integer) stats.get("salesAmount"),
-                (Double) stats.get("totalIncome"),
-                timespan
-        ))
-                .sorted((a, b) -> {
-                    if (sortBy == SortByEnum.SALES_AMOUNT) {
-                        return b.getSalesAmount().compareTo(a.getSalesAmount());
-                    } else { // GROSS_INCOME
-                        return b.getTotalIncome().compareTo(a.getTotalIncome());
-                    }
-                })
-                .limit(5)
-                .collect(Collectors.toList());
-
-        return results;
+        try {
+            return Client.ClientType.valueOf(value.toString());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
-    /**
-     * Helper class to aggregate product sales data
-     */
-    private static class ProductSalesData {
-
-        int salesAmount = 0;
-        double totalSurface = 0.0;
-        double totalIncome = 0.0;
-        double totalSaleUnits = 0.0;
-    }
 }

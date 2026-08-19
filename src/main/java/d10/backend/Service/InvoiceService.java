@@ -1,7 +1,9 @@
 package d10.backend.Service;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
+import d10.backend.Model.Product;
 import d10.backend.Repository.InvoiceRepository;
 import lombok.AllArgsConstructor;
 
@@ -55,6 +58,7 @@ public class InvoiceService {
     public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
         invoice.setInvoiceNumber(generateNextInvoiceNumber());
+        stampCostSnapshot(invoice);
         if (invoice.getStatus() == Invoice.Status.ENTREGADO || invoice.getStockDecreased().equals(true)) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
@@ -74,6 +78,10 @@ public class InvoiceService {
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
         Invoice invoice = findById(id);
+        // The incoming lines come from the frontend and carry no cost
+        // snapshot, so the stored ones are kept aside before the mapper
+        // replaces the whole product list.
+        Map<String, Double> storedCosts = costSnapshotsByProduct(invoice);
         boolean restoredStockForCancellation = false;
         if (Boolean.TRUE.equals(invoice.getStockDecreased()) && createInvoiceDTO.getStatus() == Invoice.Status.CANCELADO) {
             if (invoice.getProducts() != null) {
@@ -109,6 +117,8 @@ public class InvoiceService {
             addPaymentToCashRegister(invoice);
         } */
         InvoiceMapper.updateFromDTO(invoice, createInvoiceDTO);
+        restoreCostSnapshots(invoice, storedCosts);
+        stampCostSnapshot(invoice);
         if (restoredStockForCancellation) {
             invoice.setStockDecreased(false);
         }
@@ -191,6 +201,75 @@ public class InvoiceService {
         double paid = invoice.getPartialPayment() != null ? invoice.getPartialPayment() : 0.0;
         if (total - paid >= PAYMENT_TOLERANCE) {
             invoice.setStatus(Invoice.Status.DEUDA);
+        }
+    }
+
+    /**
+     * Copies the cost each product has today onto its invoice line.
+     *
+     * The product document only ever holds the current cost, and
+     * updateCostsByProvider rewrites it in bulk on every supplier increase, so
+     * without this a sale is re-margined against a cost that did not exist
+     * when it happened. Lines that already carry a snapshot are left alone:
+     * overwriting them would rewrite history.
+     */
+    private void stampCostSnapshot(Invoice invoice) {
+        List<InvoiceProduct> lines = invoice.getProducts();
+        if (lines == null || lines.isEmpty()) {
+            return;
+        }
+        List<String> pendingIds = lines.stream()
+                .filter(line -> line.getCostByMeasureUnitAtSale() == null && line.getId() != null)
+                .map(InvoiceProduct::getId)
+                .distinct()
+                .toList();
+        if (pendingIds.isEmpty()) {
+            return;
+        }
+        Map<String, Product> products = productService.findByIds(pendingIds);
+        for (InvoiceProduct line : lines) {
+            if (line.getCostByMeasureUnitAtSale() != null) {
+                continue;
+            }
+            Product product = products.get(line.getId());
+            if (product != null) {
+                line.setCostByMeasureUnitAtSale(product.getCostByMeasureUnit());
+            }
+        }
+    }
+
+    /**
+     * Cost snapshots of an invoice, keyed by product, so they survive an edit.
+     */
+    private Map<String, Double> costSnapshotsByProduct(Invoice invoice) {
+        Map<String, Double> costs = new HashMap<>();
+        if (invoice.getProducts() == null) {
+            return costs;
+        }
+        for (InvoiceProduct line : invoice.getProducts()) {
+            if (line.getId() != null && line.getCostByMeasureUnitAtSale() != null) {
+                costs.putIfAbsent(line.getId(), line.getCostByMeasureUnitAtSale());
+            }
+        }
+        return costs;
+    }
+
+    /**
+     * Puts the previously stored snapshots back on the lines that kept selling
+     * the same product. Lines added during the edit stay empty and are stamped
+     * with the current cost afterwards.
+     */
+    private void restoreCostSnapshots(Invoice invoice, Map<String, Double> storedCosts) {
+        if (invoice.getProducts() == null || storedCosts.isEmpty()) {
+            return;
+        }
+        for (InvoiceProduct line : invoice.getProducts()) {
+            if (line.getCostByMeasureUnitAtSale() == null) {
+                Double stored = storedCosts.get(line.getId());
+                if (stored != null) {
+                    line.setCostByMeasureUnitAtSale(stored);
+                }
+            }
         }
     }
 

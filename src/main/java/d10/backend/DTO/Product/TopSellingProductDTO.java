@@ -12,8 +12,20 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TopSellingProductDTO {
+
     private Product product;
-    private Integer salesAmount;
+
+    /** Number of separate invoices that included this product. */
+    private Integer invoiceCount;
+
+    /** Sale units (CAJA / JUEGO / UNIDAD) sold. */
+    private Integer unitsSold;
+
     private Double totalIncome;
+
+    private Double netIncome;
+
+    private Boolean costBasisEstimated;
+
     private TimeSpanEnum timespan;
 }

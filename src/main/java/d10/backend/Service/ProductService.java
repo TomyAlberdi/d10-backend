@@ -2,7 +2,10 @@ package d10.backend.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -54,6 +57,17 @@ public class ProductService {
         }
         Product product = productSearch.get();
         return product;
+    }
+
+    /**
+     * Resolves several products in a single query, keyed by id. Missing ids
+     * are simply absent from the map instead of raising, so callers that only
+     * enrich data can skip what is no longer in the catalog.
+     */
+    public Map<String, Product> findByIds(Collection<String> ids) {
+        Map<String, Product> products = new HashMap<>();
+        productRepository.findAllById(ids).forEach(product -> products.put(product.getId(), product));
+        return products;
     }
 
     public Product createProduct(CreateProductDTO createProductDTO) {
