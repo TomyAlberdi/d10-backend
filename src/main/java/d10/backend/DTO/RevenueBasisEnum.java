@@ -24,6 +24,11 @@ public enum RevenueBasisEnum {
      * Money actually collected. Leaves out DEUDA, which is a delivered sale
      * that has not been paid in full. This is the default and the closest
      * match to what the reports did before.
+     *
+     * The status set is only about which invoices count in full. The monthly
+     * income series goes further and adds the part already paid on the DEUDA
+     * invoices it excludes here, because that money did come in; see
+     * DataService#monthlyDebtPayments.
      */
     COLLECTED(EnumSet.of(
             Invoice.Status.PAGO,

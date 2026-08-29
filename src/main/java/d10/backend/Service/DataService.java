@@ -104,6 +104,10 @@ public class DataService {
 
     /**
      * Monthly income for a year, with income = 0 for months without sales.
+     *
+     * Income is what the month actually collected, so the part-payments made
+     * on invoices still owing count towards it and are also reported on their
+     * own for the chart to break the bar down.
      */
     public List<MonthlySummaryRecordDTO> getYearlySalesData(Integer year, RevenueBasisEnum basis) {
         Map<Integer, Document> byMonth = monthlyInvoiceTotals(year, basis);
@@ -111,8 +115,14 @@ public class DataService {
         List<MonthlySummaryRecordDTO> monthlySummaries = new ArrayList<>();
         for (int month = 1; month <= 12; month++) {
             Document row = byMonth.get(month);
-            double income = row == null ? 0.0 : asDouble(row.get("income"));
-            monthlySummaries.add(new MonthlySummaryRecordDTO(month, year, BigDecimal.valueOf(round2(income))));
+            double settledIncome = row == null ? 0.0 : asDouble(row.get("income"));
+            double debtPayments = row == null ? 0.0 : asDouble(row.get("debtPayments"));
+            monthlySummaries.add(new MonthlySummaryRecordDTO(
+                    month,
+                    year,
+                    BigDecimal.valueOf(round2(settledIncome + debtPayments)),
+                    BigDecimal.valueOf(round2(settledIncome)),
+                    BigDecimal.valueOf(round2(debtPayments))));
         }
         return monthlySummaries;
     }
@@ -121,6 +131,11 @@ public class DataService {
      * A1 - Monthly sales for several years at once, so a year can be read
      * against the one before it. Building materials are strongly seasonal and
      * a single year hides the shape.
+     *
+     * Income counts the part-payments on invoices still owing, the same figure
+     * the yearly chart draws, so the two cannot disagree about a month. The
+     * average ticket does not: it divides by the invoices the basis counts, so
+     * only the income of those invoices belongs in it.
      */
     public List<MonthlySalesRecordDTO> getMonthlySales(List<Integer> years, RevenueBasisEnum basis) {
         List<Integer> requested = years == null || years.isEmpty()
@@ -132,16 +147,18 @@ public class DataService {
             Map<Integer, Document> byMonth = monthlyInvoiceTotals(year, basis);
             for (int month = 1; month <= 12; month++) {
                 Document row = byMonth.get(month);
-                double income = row == null ? 0.0 : asDouble(row.get("income"));
+                double settledIncome = row == null ? 0.0 : asDouble(row.get("income"));
+                double debtPayments = row == null ? 0.0 : asDouble(row.get("debtPayments"));
                 int invoiceCount = row == null ? 0 : asInt(row.get("invoiceCount"));
                 records.add(new MonthlySalesRecordDTO(
                         year,
                         month,
-                        round2(income),
+                        round2(settledIncome + debtPayments),
+                        round2(debtPayments),
                         invoiceCount,
                         row == null ? 0 : asInt(row.get("unitsSold")),
                         row == null ? 0.0 : round2(asDouble(row.get("surfaceSold"))),
-                        invoiceCount == 0 ? 0.0 : round2(income / invoiceCount)));
+                        invoiceCount == 0 ? 0.0 : round2(settledIncome / invoiceCount)));
             }
         }
         return records;
@@ -696,6 +713,13 @@ public class DataService {
      * Units and surface are summed straight over the embedded product array,
      * so the pipeline does not have to unwind and then rebuild a distinct
      * invoice count.
+     *
+     * Rows carry {@code income}, the totals of the invoices the basis counts,
+     * and {@code debtPayments}, the money already collected on invoices the
+     * basis leaves out because they are still owed. The two are kept apart
+     * rather than summed here so the counters stay honest: a debt contributes
+     * the cash it brought in without its units, its surface or its invoice
+     * being counted as a settled sale.
      */
     private Map<Integer, Document> monthlyInvoiceTotals(Integer year, RevenueBasisEnum basis) {
         LocalDate startDate = LocalDate.of(year, 1, 1);
@@ -717,6 +741,39 @@ public class DataService {
         Map<Integer, Document> byMonth = new HashMap<>();
         for (Document row : run(aggregation, INVOICES)) {
             byMonth.put(asInt(row.get("_id")), row);
+        }
+
+        // A basis that already counts DEUDA reports the debt at its full total
+        // and has nothing left to add. COLLECTED does not, and used to drop
+        // the client's payment along with the unpaid rest, so an invoice half
+        // paid in March showed the month as if nothing had been collected.
+        if (!basis.getStatuses().contains(Invoice.Status.DEUDA)) {
+            monthlyDebtPayments(startDate, endDate).forEach((month, paid) -> byMonth
+                    .computeIfAbsent(month, key -> new Document("_id", key))
+                    .put("debtPayments", paid));
+        }
+        return byMonth;
+    }
+
+    /**
+     * Money already handed over on invoices that are still a debt, by month.
+     *
+     * partialPayment is what the client has paid so far: applyDebtStatus only
+     * stamps DEUDA while it falls short of the total, so on these invoices it
+     * never exceeds the total and can be summed as it stands.
+     */
+    private Map<Integer, Double> monthlyDebtPayments(LocalDate startDate, LocalDate endDate) {
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(
+                        statusRangeCriteria(List.of(Invoice.Status.DEUDA.name()), startDate, endDate)),
+                Aggregation.project()
+                        .and(DateOperators.Month.monthOf("date")).as("month")
+                        .and(ConditionalOperators.ifNull("partialPayment").then(0.0)).as("partialPayment"),
+                Aggregation.group("month").sum("partialPayment").as("paid"));
+
+        Map<Integer, Double> byMonth = new HashMap<>();
+        for (Document row : run(aggregation, INVOICES)) {
+            byMonth.put(asInt(row.get("_id")), asDouble(row.get("paid")));
         }
         return byMonth;
     }
@@ -766,9 +823,17 @@ public class DataService {
      * other.
      */
     private Criteria revenueCriteria(LocalDate startDate, LocalDate endDate, RevenueBasisEnum basis) {
+        return statusRangeCriteria(basis.getStatusNames(), startDate, endDate);
+    }
+
+    /**
+     * Same range, with the statuses spelled out. Only the debt payments read
+     * needs this: it goes after a status its basis deliberately leaves out.
+     */
+    private Criteria statusRangeCriteria(Collection<String> statuses, LocalDate startDate, LocalDate endDate) {
         // Starts on the status, which is always present, so an unbounded range
         // never has to build an empty Criteria with no key.
-        Criteria criteria = Criteria.where("status").in(basis.getStatusNames());
+        Criteria criteria = Criteria.where("status").in(statuses);
         if (startDate != null && endDate != null) {
             criteria = criteria.and("date").gte(toDate(startDate)).lt(toDate(endDate));
         } else if (startDate != null) {

@@ -12,7 +12,10 @@ import lombok.Setter;
 public class MonthlySalesRecordDTO {
     private Integer year;
     private Integer month;
+    /** Everything collected in the month, debtPayments included. */
     private Double income;
+    /** The part of {@code income} that came from invoices still owing. */
+    private Double debtPayments;
     private Integer invoiceCount;
     private Integer unitsSold;
     private Double surfaceSold;

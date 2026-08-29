@@ -43,6 +43,10 @@ public class DataController {
 
     /**
      * Monthly income of a year, zero filled.
+     *
+     * Income is the money the month collected: the invoices the basis counts
+     * plus whatever has already been paid on the ones still owing, reported
+     * apart as {@code debtPayments} so the chart can show both.
      */
     @GetMapping("/yearly-sales/{year}")
     public ResponseEntity<?> getYearlySalesData(
