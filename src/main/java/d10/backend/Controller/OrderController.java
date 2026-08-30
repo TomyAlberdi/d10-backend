@@ -1,8 +1,5 @@
 package d10.backend.Controller;
 
-import java.time.LocalDate;
-
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,31 +23,15 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    /**
-     * Orders, most recent batch first. Both the batch date and the received flag
-     * are optional filters.
-     */
+    /** Every order, most recent first. */
     @GetMapping
-    public ResponseEntity<?> list(
-            @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(value = "received", required = false) Boolean received) {
-        return ResponseEntity.ok(orderService.findAll(date, received));
-    }
-
-    /** Dates that have at least one order, most recent first. */
-    @GetMapping("/dates")
-    public ResponseEntity<?> getOrderDates() {
-        return ResponseEntity.ok(orderService.getOrderDates());
+    public ResponseEntity<?> list() {
+        return ResponseEntity.ok(orderService.findAll());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
         return ResponseEntity.ok(orderService.findById(id));
-    }
-
-    @GetMapping("/product/{productId}")
-    public ResponseEntity<?> getByProductId(@PathVariable String productId) {
-        return ResponseEntity.ok(orderService.findByProductId(productId));
     }
 
     @PostMapping
@@ -64,18 +45,8 @@ public class OrderController {
     }
 
     /**
-     * Receives every pending order of a batch. The ordered sale units are added
-     * to the stock of each product.
-     */
-    @PatchMapping("/received")
-    public ResponseEntity<?> receiveByDate(
-            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ResponseEntity.ok(orderService.receiveByDate(date));
-    }
-
-    /**
-     * Receives a single order, or sets it back to pending taking its sale units
-     * out of the stock again.
+     * Receives the whole order, adding the ordered sale units to the stock of
+     * every product, or sets it back to pending taking them out again.
      */
     @PatchMapping("/{id}/received")
     public ResponseEntity<?> updateReceived(

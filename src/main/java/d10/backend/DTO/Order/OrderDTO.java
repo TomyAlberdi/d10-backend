@@ -1,9 +1,9 @@
 package d10.backend.DTO.Order;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.util.List;
 
-import d10.backend.Model.Product;
+import d10.backend.Model.OrderProduct;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,24 +17,10 @@ public class OrderDTO {
 
     private String id;
 
-    private String productId;
-
-    private String productCode;
-
-    private String productName;
-
-    private String providerName;
-
-    private Integer saleUnitQuantity;
-
-    private Product.SaleType saleUnitType;
-
-    private LocalDate orderDate;
+    private LocalDate date;
 
     private Boolean received;
 
-    private LocalDateTime receivedDatetime;
-
-    private String detail;
+    private List<OrderProduct> products;
 
 }

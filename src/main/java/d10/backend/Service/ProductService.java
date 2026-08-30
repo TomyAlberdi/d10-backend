@@ -109,6 +109,28 @@ public class ProductService {
         }
     }
 
+    /**
+     * Fails when the product data would break {@link #updateStock} halfway
+     * through: a movement adds the amount to the current stock and multiplies
+     * the result by the measure per sale unit, so both values have to be there.
+     *
+     * Callers that move the stock of several products in a row check every one
+     * of them before writing the first movement, since there is no transaction
+     * to roll the earlier ones back.
+     */
+    public void checkStockUpdatable(String productId) {
+        Product product = findById(productId);
+        if (product.getMeasurePerSaleUnit() == null) {
+            throw new IllegalStateException("El producto " + product.getName()
+                    + " no tiene configurada la medida por unidad de venta.");
+        }
+        ProductStock stock = product.getStock();
+        if (stock != null && stock.getQuantity() == null) {
+            throw new IllegalStateException("El producto " + product.getName()
+                    + " no tiene una cantidad de stock válida.");
+        }
+    }
+
     public Product updateStockDecrease(String productId, int quantity, LocalDate date, String detail) {
         return updateStock(productId, StockLog.StockLogType.OUT, quantity, date, detail);
     }
