@@ -133,25 +133,42 @@ public class InvoiceService {
     }
 
     public List<Invoice> searchInvoices(String q) {
-        if (q == null) {
-            return invoiceRepository.findTop25ByOrderByDateDescInvoiceNumberDesc();
-        }
-        return invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
+        return searchInvoices(q, null, null, null);
+    }
+
+    public List<Invoice> searchInvoices(String q, LocalDate from, LocalDate to) {
+        return searchInvoices(q, null, from, to);
     }
 
     public List<Invoice> searchInvoices(String q, Invoice.Status status) {
+        return searchInvoices(q, status, null, null);
+    }
+
+    public List<Invoice> searchInvoices(String q, Invoice.Status status, LocalDate from, LocalDate to) {
+        List<Invoice> results;
         if (q == null || q.trim().isEmpty()) {
             if (status == null) {
-                return invoiceRepository.findTop25ByOrderByDateDescInvoiceNumberDesc();
+                results = invoiceRepository.findTop25ByOrderByDateDescInvoiceNumberDesc();
             } else {
-                return invoiceRepository.findByStatusOrderByDateDescInvoiceNumberDesc(status);
+                results = invoiceRepository.findByStatusOrderByDateDescInvoiceNumberDesc(status);
             }
-        }
-        if (status == null) {
-            return invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
+        } else if (status == null) {
+            results = invoiceRepository.findByInvoiceNumberOrClientCuitDniOrClientName(q);
         } else {
-            return invoiceRepository.findByStatusAndInvoiceNumberOrClientCuitDniOrClientName(status, q);
+            results = invoiceRepository.findByStatusAndInvoiceNumberOrClientCuitDniOrClientName(status, q);
         }
+
+        if (from == null && to == null) {
+            return results;
+        }
+
+        LocalDate start = from != null ? from : LocalDate.of(1900, 1, 1);
+        LocalDate end = to != null ? to : LocalDate.now().plusDays(1);
+        return results.stream()
+                .filter(invoice -> invoice.getDate() != null)
+                .filter(invoice -> !invoice.getDate().isBefore(start))
+                .filter(invoice -> !invoice.getDate().isAfter(end))
+                .toList();
     }
 
     public List<Invoice> getInvoicesWithStockNotDecreased() {

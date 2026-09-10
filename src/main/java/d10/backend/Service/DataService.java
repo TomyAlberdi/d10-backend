@@ -1,15 +1,5 @@
 package d10.backend.Service;
 
-import static d10.backend.Service.AnalyticsSupport.INVOICES;
-import static d10.backend.Service.AnalyticsSupport.TRANSACTIONS;
-import static d10.backend.Service.AnalyticsSupport.asDouble;
-import static d10.backend.Service.AnalyticsSupport.asInt;
-import static d10.backend.Service.AnalyticsSupport.asLocalDate;
-import static d10.backend.Service.AnalyticsSupport.asString;
-import static d10.backend.Service.AnalyticsSupport.round2;
-import static d10.backend.Service.AnalyticsSupport.share;
-import static d10.backend.Service.AnalyticsSupport.toDate;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -18,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +40,7 @@ import d10.backend.DTO.Data.StockValuationDTO;
 import d10.backend.DTO.Data.TopClientDTO;
 import d10.backend.DTO.Invoice.MonthlySummaryRecordDTO;
 import d10.backend.DTO.Product.BestSellingProductDTO;
+import d10.backend.DTO.Product.MonthlyBestSellingProductDTO;
 import d10.backend.DTO.Product.TopSellingProductDTO;
 import d10.backend.DTO.RevenueBasisEnum;
 import d10.backend.DTO.SortByEnum;
@@ -58,6 +50,15 @@ import d10.backend.Model.Client;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.Product;
 import d10.backend.Repository.ProductRepository;
+import static d10.backend.Service.AnalyticsSupport.INVOICES;
+import static d10.backend.Service.AnalyticsSupport.TRANSACTIONS;
+import static d10.backend.Service.AnalyticsSupport.asDouble;
+import static d10.backend.Service.AnalyticsSupport.asInt;
+import static d10.backend.Service.AnalyticsSupport.asLocalDate;
+import static d10.backend.Service.AnalyticsSupport.asString;
+import static d10.backend.Service.AnalyticsSupport.round2;
+import static d10.backend.Service.AnalyticsSupport.share;
+import static d10.backend.Service.AnalyticsSupport.toDate;
 import lombok.AllArgsConstructor;
 
 /**
@@ -71,8 +72,8 @@ import lombok.AllArgsConstructor;
  * documents themselves, fetched once with findAllById.
  *
  * Field names are written as they are stored, not as they are declared in the
- * model: the id of an embedded object is persisted as _id, so invoice lines
- * are matched on products._id and clients on client._id.
+ * model: the id of an embedded object is persisted as _id, so invoice lines are
+ * matched on products._id and clients on client._id.
  *
  * Endpoint contract: monthly series take a year, everything else takes an
  * optional from/to range.
@@ -85,29 +86,37 @@ public class DataService {
     private final StockAnalyticsService stockAnalyticsService;
     private final MongoTemplate mongoTemplate;
 
-    /** Surface below which a product counts as fully cost-snapshotted. */
+    /**
+     * Surface below which a product counts as fully cost-snapshotted.
+     */
     private static final double SURFACE_TOLERANCE = 0.0001;
 
-    /** Shown instead of an empty label when a product has no category or provider. */
+    /**
+     * Shown instead of an empty label when a product has no category or
+     * provider.
+     */
     private static final String UNCLASSIFIED = "Sin clasificar";
 
-    /** Payment method bucket for invoices issued before the field existed. */
+    /**
+     * Payment method bucket for invoices issued before the field existed.
+     */
     private static final String UNSPECIFIED_METHOD = "UNSPECIFIED";
 
-    /** Upper bound of each receivables age bucket, in days. */
-    private static final int[] AGING_BUCKET_LIMITS = { 30, 60, 90 };
-    private static final String[] AGING_BUCKET_LABELS = { "0-30", "31-60", "61-90", "90+" };
+    /**
+     * Upper bound of each receivables age bucket, in days.
+     */
+    private static final int[] AGING_BUCKET_LIMITS = {30, 60, 90};
+    private static final String[] AGING_BUCKET_LABELS = {"0-30", "31-60", "61-90", "90+"};
 
     // =====================================================================
     // Sales
     // =====================================================================
-
     /**
      * Monthly income for a year, with income = 0 for months without sales.
      *
-     * Income is what the month actually collected, so the part-payments made
-     * on invoices still owing count towards it and are also reported on their
-     * own for the chart to break the bar down.
+     * Income is what the month actually collected, so the part-payments made on
+     * invoices still owing count towards it and are also reported on their own
+     * for the chart to break the bar down.
      */
     public List<MonthlySummaryRecordDTO> getYearlySalesData(Integer year, RevenueBasisEnum basis) {
         Map<Integer, Document> byMonth = monthlyInvoiceTotals(year, basis);
@@ -129,8 +138,8 @@ public class DataService {
 
     /**
      * A1 - Monthly sales for several years at once, so a year can be read
-     * against the one before it. Building materials are strongly seasonal and
-     * a single year hides the shape.
+     * against the one before it. Building materials are strongly seasonal and a
+     * single year hides the shape.
      *
      * Income counts the part-payments on invoices still owing, the same figure
      * the yearly chart draws, so the two cannot disagree about a month. The
@@ -225,7 +234,6 @@ public class DataService {
     // =====================================================================
     // A0 - KPI summary
     // =====================================================================
-
     /**
      * The headline figures of a period, each next to the same figure over the
      * period of equal length immediately before it.
@@ -268,7 +276,6 @@ public class DataService {
     // =====================================================================
     // Product rankings
     // =====================================================================
-
     /**
      * The 15 best selling products for a time span and sort criteria.
      */
@@ -278,6 +285,70 @@ public class DataService {
                 .sorted(comparator(sortBy))
                 .limit(15)
                 .toList();
+    }
+
+    /**
+     * The 10 best selling products of a single month, optionally narrowed to a
+     * category or subcategory and using the product subtotal at line level.
+     */
+    public List<MonthlyBestSellingProductDTO> getBestSellingProductsByMonth(Integer month, String category,
+            String subcategory, RevenueBasisEnum basis) {
+        int targetMonth = month == null ? LocalDate.now().getMonthValue() : month;
+        if (targetMonth < 1) {
+            targetMonth = 1;
+        } else if (targetMonth > 12) {
+            targetMonth = 12;
+        }
+
+        LocalDate now = LocalDate.now();
+        LocalDate start = LocalDate.of(now.getYear(), targetMonth, 1);
+        LocalDate end = start.plusMonths(1);
+
+        Criteria criteria = revenueCriteria(start, end, basis);
+        Set<String> productIds = productIdsForCategoryOrSubcategory(category, subcategory);
+        if (!productIds.isEmpty()) {
+            criteria = criteria.and("products._id").in(productIds);
+        }
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.unwind("products"),
+                Aggregation.project()
+                        .and("products._id").as("productId")
+                        .and("products.name").as("productName")
+                        .and(ConditionalOperators.ifNull("products.subtotal").then(0.0)).as("subtotal"),
+                Aggregation.group("productId", "productName")
+                        .sum("subtotal").as("totalValue")
+                        .count().as("monthlySales"));
+
+        List<MonthlyBestSellingProductDTO> monthlySales = new ArrayList<>();
+        for (Document row : run(aggregation, INVOICES)) {
+            Document key = (Document) row.get("_id");
+            if (key == null) {
+                continue;
+            }
+
+            String productId = asString(key.get("productId"));
+            if (productId == null || productId.isBlank()) {
+                continue;
+            }
+
+            String productName = asString(key.get("productName"));
+            if (productName == null || productName.isBlank()) {
+                productName = productRepository.findById(productId)
+                        .map(Product::getName)
+                        .orElse("Sin nombre");
+            }
+
+            monthlySales.add(new MonthlyBestSellingProductDTO(
+                    productId,
+                    productName,
+                    asInt(row.get("monthlySales")),
+                    round2(asDouble(row.get("totalValue")))));
+        }
+
+        monthlySales.sort(Comparator.comparingDouble(MonthlyBestSellingProductDTO::getTotalValue).reversed());
+        return monthlySales.stream().limit(10).toList();
     }
 
     /**
@@ -306,21 +377,22 @@ public class DataService {
                 .sorted(comparator(sortBy))
                 .limit(5)
                 .map(dto -> new TopSellingProductDTO(
-                        dto.getProduct(),
-                        dto.getInvoiceCount(),
-                        dto.getUnitsSold(),
-                        dto.getTotalIncome(),
-                        dto.getNetIncome(),
-                        dto.getCostBasisEstimated(),
-                        timespan))
+                dto.getProduct(),
+                dto.getInvoiceCount(),
+                dto.getUnitsSold(),
+                dto.getTotalIncome(),
+                dto.getNetIncome(),
+                dto.getCostBasisEstimated(),
+                timespan))
                 .toList();
     }
 
     // =====================================================================
     // A3 - Revenue mix
     // =====================================================================
-
-    /** Whether a revenue mix is grouped by category or by subcategory. */
+    /**
+     * Whether a revenue mix is grouped by category or by subcategory.
+     */
     public enum CategoryLevelEnum {
         CATEGORY, SUBCATEGORY
     }
@@ -364,7 +436,6 @@ public class DataService {
     // =====================================================================
     // E1 - Providers
     // =====================================================================
-
     /**
      * E1 - Revenue, margin and immobilised stock per supplier.
      *
@@ -429,7 +500,6 @@ public class DataService {
     // =====================================================================
     // B1 / B2 - Receivables
     // =====================================================================
-
     /**
      * B1 - Outstanding balance on delivered but unpaid sales, by age.
      *
@@ -523,7 +593,6 @@ public class DataService {
     // =====================================================================
     // Cash register
     // =====================================================================
-
     /**
      * Monthly cash in, cash out and net movement for a year.
      *
@@ -570,7 +639,6 @@ public class DataService {
     // =====================================================================
     // Clients
     // =====================================================================
-
     /**
      * Clients ranked by revenue over a period.
      *
@@ -617,7 +685,6 @@ public class DataService {
     // =====================================================================
     // Shared pipelines
     // =====================================================================
-
     /**
      * Aggregates every invoice line of the period into one row per product and
      * joins the product documents in a single findAllById.
@@ -710,9 +777,9 @@ public class DataService {
     /**
      * Invoice totals of a year, grouped by month.
      *
-     * Units and surface are summed straight over the embedded product array,
-     * so the pipeline does not have to unwind and then rebuild a distinct
-     * invoice count.
+     * Units and surface are summed straight over the embedded product array, so
+     * the pipeline does not have to unwind and then rebuild a distinct invoice
+     * count.
      *
      * Rows carry {@code income}, the totals of the invoices the basis counts,
      * and {@code debtPayments}, the money already collected on invoices the
@@ -778,7 +845,9 @@ public class DataService {
         return byMonth;
     }
 
-    /** Revenue and invoice count of a single period, as one row. */
+    /**
+     * Revenue and invoice count of a single period, as one row.
+     */
     private Document invoiceTotals(LocalDate from, LocalDate to, RevenueBasisEnum basis) {
         Aggregation aggregation = Aggregation.newAggregation(
                 Aggregation.match(revenueCriteria(from, to, basis)),
@@ -791,8 +860,8 @@ public class DataService {
 
     /**
      * Cash in minus cash out over a period. The USD register is excluded: it
-     * holds a different currency, the same rule getDailyTotals follows. The
-     * $ne also keeps legacy rows that carry no register type at all.
+     * holds a different currency, the same rule getDailyTotals follows. The $ne
+     * also keeps legacy rows that carry no register type at all.
      */
     private double netCash(LocalDate from, LocalDate to) {
         Aggregation aggregation = Aggregation.newAggregation(
@@ -816,7 +885,6 @@ public class DataService {
     // =====================================================================
     // Helpers
     // =====================================================================
-
     /**
      * Date range plus the status set of the requested revenue basis. Every
      * report goes through here, which is what keeps them agreeing with each
@@ -847,9 +915,12 @@ public class DataService {
     private LocalDate calculateStartDate(TimeSpanEnum timeSpan) {
         LocalDate now = LocalDate.now();
         return switch (timeSpan) {
-            case THIS_MONTH -> now.withDayOfMonth(1);
-            case THIS_YEAR -> now.withDayOfYear(1);
-            case ALL_TIME -> LocalDate.of(1900, 1, 1);
+            case THIS_MONTH ->
+                now.withDayOfMonth(1);
+            case THIS_YEAR ->
+                now.withDayOfYear(1);
+            case ALL_TIME ->
+                LocalDate.of(1900, 1, 1);
         };
     }
 
@@ -864,18 +935,22 @@ public class DataService {
 
     private Comparator<BestSellingProductDTO> comparator(SortByEnum sortBy) {
         return switch (sortBy) {
-            case INVOICE_COUNT -> Comparator.comparingInt(
-                    (BestSellingProductDTO dto) -> dto.getInvoiceCount() == null ? 0 : dto.getInvoiceCount())
-                    .reversed();
-            case UNITS_SOLD -> Comparator.comparingInt(
-                    (BestSellingProductDTO dto) -> dto.getUnitsSold() == null ? 0 : dto.getUnitsSold())
-                    .reversed();
-            case GROSS_INCOME -> Comparator.comparingDouble(
-                    (BestSellingProductDTO dto) -> dto.getTotalIncome() == null ? 0.0 : dto.getTotalIncome())
-                    .reversed();
-            case NET_INCOME -> Comparator.comparingDouble(
-                    (BestSellingProductDTO dto) -> dto.getNetIncome() == null ? 0.0 : dto.getNetIncome())
-                    .reversed();
+            case INVOICE_COUNT ->
+                Comparator.comparingInt(
+                (BestSellingProductDTO dto) -> dto.getInvoiceCount() == null ? 0 : dto.getInvoiceCount())
+                .reversed();
+            case UNITS_SOLD ->
+                Comparator.comparingInt(
+                (BestSellingProductDTO dto) -> dto.getUnitsSold() == null ? 0 : dto.getUnitsSold())
+                .reversed();
+            case GROSS_INCOME ->
+                Comparator.comparingDouble(
+                (BestSellingProductDTO dto) -> dto.getTotalIncome() == null ? 0.0 : dto.getTotalIncome())
+                .reversed();
+            case NET_INCOME ->
+                Comparator.comparingDouble(
+                (BestSellingProductDTO dto) -> dto.getNetIncome() == null ? 0.0 : dto.getNetIncome())
+                .reversed();
         };
     }
 
@@ -885,6 +960,23 @@ public class DataService {
 
     private Set<String> idsOf(Collection<Product> products) {
         return products.stream().map(Product::getId).collect(Collectors.toSet());
+    }
+
+    private Set<String> productIdsForCategoryOrSubcategory(String category, String subcategory) {
+        Set<String> ids = new HashSet<>();
+
+        if (category != null && !category.isBlank()) {
+            ids.addAll(idsOf(productRepository.findByCategoryIgnoreCase(category)));
+        }
+        if (subcategory != null && !subcategory.isBlank()) {
+            Set<String> matchingSubcategoryIds = idsOf(productRepository.findBySubcategoryIgnoreCase(subcategory));
+            if (ids.isEmpty()) {
+                ids.addAll(matchingSubcategoryIds);
+            } else {
+                ids.retainAll(matchingSubcategoryIds);
+            }
+        }
+        return ids;
     }
 
     private static Client.ClientType asClientType(Object value) {

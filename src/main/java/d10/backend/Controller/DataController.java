@@ -147,6 +147,20 @@ public class DataController {
         return ResponseEntity.ok(dataService.getTop5BySubcategory(subcategory, sortBy, timespan, basis));
     }
 
+    /**
+     * The 10 best selling products of a given month, optionally filtered by
+     * category or subcategory. The subtotal on each product line is used, not
+     * the invoice total.
+     */
+    @GetMapping("/best-selling-products/monthly")
+    public ResponseEntity<?> getBestSellingProductsByMonth(
+            @RequestParam(value = "month", required = false) Integer month,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "subcategory", required = false) String subcategory,
+            @RequestParam(value = "basis", defaultValue = "COLLECTED") RevenueBasisEnum basis) {
+        return ResponseEntity.ok(dataService.getBestSellingProductsByMonth(month, category, subcategory, basis));
+    }
+
     // ---------------------------------------------------------- receivables
 
     /**
