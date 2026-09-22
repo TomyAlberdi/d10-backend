@@ -21,6 +21,7 @@ import d10.backend.DTO.CashRegister.CashRegisterDailyTotalsDTO;
 import d10.backend.DTO.CashRegister.CashRegisterTransactionDTO;
 import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
 import d10.backend.Model.CashRegister;
+import d10.backend.Model.CashRegisterTransaction;
 import d10.backend.Service.CashRegisterService;
 import lombok.RequiredArgsConstructor;
 
@@ -66,15 +67,16 @@ public class CashRegisterController {
      * Returns paginated transactions.
      * Default page size: 50
      * If date is provided, filters by that date. If not provided, returns all transactions.
-     * Supports optional type filter (PAPER or DIGITAL).
+     * Supports optional type filter (PAPER, DIGITAL or USD) and optional direction filter (IN or OUT).
      */
     @GetMapping("/transactions/paginated")
     public ResponseEntity<Page<CashRegisterTransactionDTO>> listTransactionsPaginated(
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(value = "type", required = false) CashRegister.CashRegisterType type,
+            @RequestParam(value = "direction", required = false) CashRegisterTransaction.TransactionType direction,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size) {
-        return ResponseEntity.ok(cashRegisterService.listTransactionsPaginated(date, type, page, size));
+        return ResponseEntity.ok(cashRegisterService.listTransactionsPaginated(date, type, direction, page, size));
     }
 
     /**
