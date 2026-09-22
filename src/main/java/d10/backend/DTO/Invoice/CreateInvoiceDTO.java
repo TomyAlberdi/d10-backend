@@ -24,4 +24,5 @@ public class CreateInvoiceDTO {
     private String notes;
     private Double partialPayment;
     private Invoice.PaymentMethod paymentMethod;
+    private Double balanceApplied;
 }

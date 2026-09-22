@@ -52,4 +52,17 @@ public class ClientService {
         clientRepository.deleteById(id);
     }
 
+    /**
+     * Moves a client's balance by {@code delta} (positive adds, negative
+     * removes) and persists it. Used both for manual adjustments and for the
+     * automatic effects invoices have on a client's balance.
+     */
+    public Client adjustBalance(String id, double delta) {
+        Client client = findById(id);
+        double current = client.getBalance() != null ? client.getBalance() : 0.0;
+        client.setBalance(current + delta);
+        clientRepository.save(client);
+        return client;
+    }
+
 }
