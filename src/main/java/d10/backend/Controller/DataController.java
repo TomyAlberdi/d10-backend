@@ -68,6 +68,33 @@ public class DataController {
     }
 
     /**
+     * Monthly ticket and m2 metrics of a year, zero filled: average ticket in
+     * $, average ticket in m2 and average price per m2.
+     *
+     * @param year defaults to the current year
+     * @param category optional, matched ignoring case
+     * @param subcategory optional; with a category, both must match
+     */
+    @GetMapping("/sales/monthly-metrics")
+    public ResponseEntity<?> getMonthlySalesMetrics(
+            @RequestParam(value = "year", required = false) Integer year,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "subcategory", required = false) String subcategory,
+            @RequestParam(value = "basis", defaultValue = "COLLECTED") RevenueBasisEnum basis) {
+        return ResponseEntity.ok(dataService.getMonthlySalesMetrics(year, category, subcategory, basis));
+    }
+
+    /**
+     * The same metrics over a whole year, year to date for the current one.
+     */
+    @GetMapping("/sales/metrics-summary")
+    public ResponseEntity<?> getSalesMetricsSummary(
+            @RequestParam(value = "year", required = false) Integer year,
+            @RequestParam(value = "basis", defaultValue = "COLLECTED") RevenueBasisEnum basis) {
+        return ResponseEntity.ok(dataService.getSalesMetricsSummary(year, basis));
+    }
+
+    /**
      * Years that hold at least one invoice, most recent first. Lets the year
      * selector be built from the data instead of hardcoded.
      */

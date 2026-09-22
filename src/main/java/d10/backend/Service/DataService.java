@@ -16,10 +16,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.AccumulatorOperators;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
 import org.springframework.data.mongodb.core.aggregation.ArithmeticOperators;
 import org.springframework.data.mongodb.core.aggregation.ArrayOperators;
 import org.springframework.data.mongodb.core.aggregation.ConditionalOperators;
@@ -32,10 +34,12 @@ import d10.backend.DTO.Data.CategoryRevenueDTO;
 import d10.backend.DTO.Data.DebtorDTO;
 import d10.backend.DTO.Data.KpiSummaryDTO;
 import d10.backend.DTO.Data.MonthlyCashFlowDTO;
+import d10.backend.DTO.Data.MonthlySalesMetricsDTO;
 import d10.backend.DTO.Data.MonthlySalesRecordDTO;
 import d10.backend.DTO.Data.PaymentMethodRecordDTO;
 import d10.backend.DTO.Data.ProviderPerformanceDTO;
 import d10.backend.DTO.Data.ReceivableBucketDTO;
+import d10.backend.DTO.Data.SalesMetricsSummaryDTO;
 import d10.backend.DTO.Data.StockValuationDTO;
 import d10.backend.DTO.Data.TopClientDTO;
 import d10.backend.DTO.Invoice.MonthlySummaryRecordDTO;
@@ -174,6 +178,145 @@ public class DataService {
     }
 
     /**
+     * Average ticket in $, average ticket in m2 and average price per m2, month
+     * by month, optionally narrowed to a category and/or subcategory.
+     *
+     * Unfiltered, revenue is the invoice total, the same figure every other
+     * sales chart uses. Filtered, an invoice total says nothing about one
+     * category, so revenue becomes the subtotals of the matching lines and a
+     * sale counts once however many matching lines it carries.
+     *
+     * The m2 figures only read lines sold by the square metre: adhesives and
+     * grout sold by the unit would otherwise inflate the price per m2 and
+     * pull the m2 ticket towards zero.
+     */
+    public List<MonthlySalesMetricsDTO> getMonthlySalesMetrics(Integer year, String category, String subcategory,
+            RevenueBasisEnum basis) {
+        int targetYear = year == null ? LocalDate.now().getYear() : year;
+        Map<Integer, Document> byMonth = monthlyLineMetrics(targetYear, category, subcategory, basis);
+
+        List<MonthlySalesMetricsDTO> records = new ArrayList<>();
+        for (int month = 1; month <= 12; month++) {
+            records.add(toSalesMetrics(targetYear, month, byMonth.get(month)));
+        }
+        return records;
+    }
+
+    /**
+     * The year of {@link #getMonthlySalesMetrics} folded into one row, with the
+     * ratios recomputed over the summed figures.
+     */
+    public SalesMetricsSummaryDTO getSalesMetricsSummary(Integer year, RevenueBasisEnum basis) {
+        int targetYear = year == null ? LocalDate.now().getYear() : year;
+
+        int invoiceCount = 0;
+        int m2InvoiceCount = 0;
+        double revenue = 0.0;
+        double surfaceM2 = 0.0;
+        double m2Revenue = 0.0;
+        for (Document row : monthlyLineMetrics(targetYear, null, null, basis).values()) {
+            invoiceCount += asInt(row.get("invoiceCount"));
+            m2InvoiceCount += asInt(row.get("m2InvoiceCount"));
+            revenue += asDouble(row.get("revenue"));
+            surfaceM2 += asDouble(row.get("surfaceM2"));
+            m2Revenue += asDouble(row.get("m2Revenue"));
+        }
+
+        return new SalesMetricsSummaryDTO(
+                targetYear,
+                invoiceCount,
+                round2(revenue),
+                invoiceCount == 0 ? 0.0 : round2(revenue / invoiceCount),
+                m2InvoiceCount,
+                round2(surfaceM2),
+                round2(m2Revenue),
+                m2InvoiceCount == 0 ? 0.0 : round2(surfaceM2 / m2InvoiceCount),
+                surfaceM2 == 0.0 ? 0.0 : round2(m2Revenue / surfaceM2));
+    }
+
+    private MonthlySalesMetricsDTO toSalesMetrics(int year, int month, Document row) {
+        if (row == null) {
+            return new MonthlySalesMetricsDTO(year, month, 0, 0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0);
+        }
+        int invoiceCount = asInt(row.get("invoiceCount"));
+        int m2InvoiceCount = asInt(row.get("m2InvoiceCount"));
+        double revenue = asDouble(row.get("revenue"));
+        double surfaceM2 = asDouble(row.get("surfaceM2"));
+        double m2Revenue = asDouble(row.get("m2Revenue"));
+        return new MonthlySalesMetricsDTO(
+                year,
+                month,
+                invoiceCount,
+                round2(revenue),
+                invoiceCount == 0 ? 0.0 : round2(revenue / invoiceCount),
+                m2InvoiceCount,
+                round2(surfaceM2),
+                round2(m2Revenue),
+                m2InvoiceCount == 0 ? 0.0 : round2(surfaceM2 / m2InvoiceCount),
+                surfaceM2 == 0.0 ? 0.0 : round2(m2Revenue / surfaceM2));
+    }
+
+    /**
+     * One row per month carrying invoiceCount, revenue, m2InvoiceCount,
+     * surfaceM2 and m2Revenue.
+     *
+     * Lines are unwound and folded back per invoice first, so the invoice
+     * counts are of distinct sales and the invoice total is taken once, not
+     * once per line.
+     */
+    private Map<Integer, Document> monthlyLineMetrics(int year, String category, String subcategory,
+            RevenueBasisEnum basis) {
+        Criteria criteria = revenueCriteria(LocalDate.of(year, 1, 1), LocalDate.of(year + 1, 1, 1), basis);
+
+        Set<String> productIds = filteredProductIds(category, subcategory);
+        boolean filtered = productIds != null;
+        if (filtered && productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<AggregationOperation> stages = new ArrayList<>();
+        if (filtered) {
+            List<Object> storedIds = storedIdsOf(productIds);
+            stages.add(Aggregation.match(criteria.and("products._id").in(storedIds)));
+            stages.add(Aggregation.unwind("products"));
+            stages.add(Aggregation.match(Criteria.where("products._id").in(storedIds)));
+        } else {
+            stages.add(Aggregation.match(criteria));
+            // An invoice without lines is still a sale for the $ ticket.
+            stages.add(Aggregation.unwind("products", true));
+        }
+        stages.add(Aggregation.project()
+                .and("_id").as("invoiceId")
+                .and(DateOperators.Month.monthOf("date")).as("month")
+                .and(ConditionalOperators.ifNull("total").then(0.0)).as("invoiceTotal")
+                .and(ConditionalOperators.ifNull("products.subtotal").then(0.0)).as("lineIncome")
+                .and(ConditionalOperators.ifNull("products.measureUnitQuantity").then(0.0)).as("lineMeasure")
+                .and(ConditionalOperators.when(Criteria.where("products.measureType").is(Product.MeasureType.M2.name()))
+                        .then(1).otherwise(0)).as("isM2"));
+        stages.add(Aggregation.project("invoiceId", "month", "invoiceTotal", "lineIncome", "isM2")
+                .and(ArithmeticOperators.valueOf("isM2").multiplyBy("lineMeasure")).as("lineM2")
+                .and(ArithmeticOperators.valueOf("isM2").multiplyBy("lineIncome")).as("lineM2Income"));
+        stages.add(Aggregation.group("month", "invoiceId")
+                .first("invoiceTotal").as("invoiceTotal")
+                .sum("lineIncome").as("lineIncome")
+                .sum("lineM2").as("surfaceM2")
+                .sum("lineM2Income").as("m2Revenue")
+                .max("isM2").as("hasM2"));
+        stages.add(Aggregation.group("month")
+                .count().as("invoiceCount")
+                .sum(filtered ? "lineIncome" : "invoiceTotal").as("revenue")
+                .sum("hasM2").as("m2InvoiceCount")
+                .sum("surfaceM2").as("surfaceM2")
+                .sum("m2Revenue").as("m2Revenue"));
+
+        Map<Integer, Document> byMonth = new HashMap<>();
+        for (Document row : run(Aggregation.newAggregation(stages), INVOICES)) {
+            byMonth.put(asInt(row.get("_id")), row);
+        }
+        return byMonth;
+    }
+
+    /**
      * Years that actually contain invoices, most recent first.
      */
     public List<AvailableYearDTO> getAvailableYears() {
@@ -307,7 +450,7 @@ public class DataService {
         Criteria criteria = revenueCriteria(start, end, basis);
         Set<String> productIds = productIdsForCategoryOrSubcategory(category, subcategory);
         if (!productIds.isEmpty()) {
-            criteria = criteria.and("products._id").in(productIds);
+            criteria = criteria.and("products._id").in(storedIdsOf(productIds));
         }
 
         Aggregation aggregation = Aggregation.newAggregation(
@@ -977,6 +1120,43 @@ public class DataService {
             }
         }
         return ids;
+    }
+
+    /**
+     * Products matching a category and/or subcategory, both when both are
+     * given. Null means no filter was asked for; an empty set means one was
+     * and nothing matches, which must yield no sales rather than all of them.
+     */
+    private Set<String> filteredProductIds(String category, String subcategory) {
+        boolean byCategory = category != null && !category.isBlank();
+        boolean bySubcategory = subcategory != null && !subcategory.isBlank();
+        if (!byCategory && !bySubcategory) {
+            return null;
+        }
+
+        Set<String> ids = null;
+        if (byCategory) {
+            ids = idsOf(productRepository.findByCategoryIgnoreCase(category));
+        }
+        if (bySubcategory) {
+            Set<String> matching = idsOf(productRepository.findBySubcategoryIgnoreCase(subcategory));
+            if (ids == null) {
+                ids = matching;
+            } else {
+                ids.retainAll(matching);
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * Product ids as invoice lines store them: an untyped aggregation does not
+     * convert a hex string into the ObjectId held in products._id.
+     */
+    private static List<Object> storedIdsOf(Collection<String> ids) {
+        return ids.stream()
+                .map(id -> ObjectId.isValid(id) ? (Object) new ObjectId(id) : id)
+                .toList();
     }
 
     private static Client.ClientType asClientType(Object value) {
