@@ -32,6 +32,11 @@ public class Invoice {
     private Boolean stockDecreased = false;
     private String invoiceNumber;
     private PaymentMethod paymentMethod;
+    /**
+     * Amount discounted from this invoice because the client had a positive
+     * balance (credit in their favor) at the time of creation.
+     */
+    private Double balanceApplied = 0.0;
 
     public enum Status {
         PENDIENTE, PAGO, DEUDA, ENVIADO, ENTREGADO, CANCELADO

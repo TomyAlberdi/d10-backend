@@ -1,10 +1,12 @@
 package d10.backend.Service;
 
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -14,6 +16,7 @@ import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.InvoiceMapper;
 import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
+import d10.backend.Model.Client;
 import d10.backend.Model.Invoice;
 import d10.backend.Model.InvoiceProduct;
 import d10.backend.Model.Product;
@@ -27,6 +30,14 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final ProductService productService;
     private final CashRegisterService cashRegisterService;
+    private final ClientService clientService;
+
+    /**
+     * Statuses that mean the sale is settled/paid in full. Mirrors the
+     * frontend's SETTLED_STATUSES in lib/invoice.ts.
+     */
+    private static final Set<Invoice.Status> SETTLED_STATUSES =
+            EnumSet.of(Invoice.Status.PAGO, Invoice.Status.ENVIADO, Invoice.Status.ENTREGADO);
 
     /**
      * Tolerance used when comparing amounts: a balance under a cent is paid.
@@ -69,6 +80,7 @@ public class InvoiceService {
             invoice.setStockDecreased(true);
         }
         applyDebtStatus(invoice);
+        applyClientBalanceEffects(invoice);
         invoiceRepository.save(invoice);
         /*         if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
             addPaymentToCashRegister(invoice);
@@ -218,6 +230,33 @@ public class InvoiceService {
         double paid = invoice.getPartialPayment() != null ? invoice.getPartialPayment() : 0.0;
         if (total - paid >= PAYMENT_TOLERANCE) {
             invoice.setStatus(Invoice.Status.DEUDA);
+        }
+    }
+
+    /**
+     * Keeps a client's balance in sync with a newly created invoice: a debt
+     * subtracts the amount still owed, and a fully paid sale consumes the
+     * credit balance that was discounted from its total. Nothing happens for
+     * statuses that are neither settled nor a debt (e.g. a pending budget),
+     * since the sale has not affected the client's money yet.
+     */
+    private void applyClientBalanceEffects(Invoice invoice) {
+        if (invoice.getClient() == null || invoice.getClient().getId() == null) {
+            return;
+        }
+        Client client = clientService.findById(invoice.getClient().getId());
+        double clientBalance = client.getBalance() != null ? client.getBalance() : 0.0;
+        if (SETTLED_STATUSES.contains(invoice.getStatus())) {
+            double requestedDiscount = invoice.getBalanceApplied() != null ? invoice.getBalanceApplied() : 0.0;
+            double consumed = Math.max(0, Math.min(requestedDiscount, Math.max(0, clientBalance)));
+            if (consumed > 0) {
+                clientService.adjustBalance(client.getId(), -consumed);
+            }
+        } else if (invoice.getStatus() == Invoice.Status.DEUDA) {
+            double total = invoice.getTotal() != null ? invoice.getTotal() : 0.0;
+            if (total > 0) {
+                clientService.adjustBalance(client.getId(), -total);
+            }
         }
     }
 

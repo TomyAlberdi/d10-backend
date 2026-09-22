@@ -25,6 +25,12 @@ public class Client {
     private String phone;
     private String email;
     private String cuitDni;
+    /**
+     * Money the client owes (negative) or is owed back (positive). Kept up to
+     * date by manual adjustments and by invoices created with DEUDA/PAGO
+     * statuses.
+     */
+    private Double balance = 0.0;
 
     public enum ClientType {
         CONSUMIDOR_FINAL,

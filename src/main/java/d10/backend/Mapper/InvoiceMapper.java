@@ -24,6 +24,7 @@ public class InvoiceMapper {
         invoice.setTotal(createInvoiceDTO.getTotal());
         invoice.setNotes(createInvoiceDTO.getNotes());
         invoice.setPaymentMethod(createInvoiceDTO.getPaymentMethod());
+        invoice.setBalanceApplied(createInvoiceDTO.getBalanceApplied());
     }
 
 }
