@@ -2,7 +2,10 @@ package d10.backend.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -16,7 +19,7 @@ import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProductMapper;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
-import d10.backend.Model.ProductStockRecord;
+import d10.backend.Model.StockLog;
 import d10.backend.Repository.ProductPaginationRepository;
 import d10.backend.Repository.ProductRepository;
 import lombok.AllArgsConstructor;
@@ -27,6 +30,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final ProductPaginationRepository productPaginationRepository;
+    private final StockLogService stockLogService;
 
     public Page<Product> getPaginatedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -53,6 +57,17 @@ public class ProductService {
         }
         Product product = productSearch.get();
         return product;
+    }
+
+    /**
+     * Resolves several products in a single query, keyed by id. Missing ids
+     * are simply absent from the map instead of raising, so callers that only
+     * enrich data can skip what is no longer in the catalog.
+     */
+    public Map<String, Product> findByIds(Collection<String> ids) {
+        Map<String, Product> products = new HashMap<>();
+        productRepository.findAllById(ids).forEach(product -> products.put(product.getId(), product));
+        return products;
     }
 
     public Product createProduct(CreateProductDTO createProductDTO) {
@@ -94,46 +109,60 @@ public class ProductService {
         }
     }
 
-    public Product updateStockDecrease(String productId, int quantity, LocalDate date) {
-        findById(productId);
-        ProductStockRecord stockRecord = new ProductStockRecord();
-        stockRecord.setType(ProductStockRecord.RecordType.OUT);
-        stockRecord.setQuantity(quantity);
-        stockRecord.setDate(date != null ? date : LocalDate.now());
-        return updateStock(productId, stockRecord);
+    /**
+     * Fails when the product data would break {@link #updateStock} halfway
+     * through: a movement adds the amount to the current stock and multiplies
+     * the result by the measure per sale unit, so both values have to be there.
+     *
+     * Callers that move the stock of several products in a row check every one
+     * of them before writing the first movement, since there is no transaction
+     * to roll the earlier ones back.
+     */
+    public void checkStockUpdatable(String productId) {
+        Product product = findById(productId);
+        if (product.getMeasurePerSaleUnit() == null) {
+            throw new IllegalStateException("El producto " + product.getName()
+                    + " no tiene configurada la medida por unidad de venta.");
+        }
+        ProductStock stock = product.getStock();
+        if (stock != null && stock.getQuantity() == null) {
+            throw new IllegalStateException("El producto " + product.getName()
+                    + " no tiene una cantidad de stock válida.");
+        }
     }
 
-    public Product updateStock(String id, ProductStockRecord stockRecord) {
+    public Product updateStockDecrease(String productId, int quantity, LocalDate date, String detail) {
+        return updateStock(productId, StockLog.StockLogType.OUT, quantity, date, detail);
+    }
+
+    public Product updateStockIncrease(String productId, int quantity, LocalDate date, String detail) {
+        return updateStock(productId, StockLog.StockLogType.IN, quantity, date, detail);
+    }
+
+    public Product updateStock(String id, StockLog.StockLogType type, Integer quantity, LocalDate date, String detail) {
         Product product = findById(id);
         ProductStock stock = product.getStock();
         if (stock == null) {
-            stock = new ProductStock();
-            stock.setQuantity(0);
-            stock.setMeasureUnitEquivalent(0.0);
-            stock.setRecordList(new ArrayList<>());
+            stock = new ProductStock(0, 0.0);
             product.setStock(stock);
         }
-        // Update quantity based on record type
-        if (stockRecord.getType() == ProductStockRecord.RecordType.IN) {
-            stock.setQuantity(stock.getQuantity() + stockRecord.getQuantity());
-        } else if (stockRecord.getType() == ProductStockRecord.RecordType.OUT) {
-            if (stock.getQuantity() < stockRecord.getQuantity()) {
-                throw new InsufficientStockException("Stock insuficiente. Cantidad disponible: " + stock.getQuantity() + ", cantidad solicitada: " + stockRecord.getQuantity());
+        // Update quantity based on movement type
+        if (type == StockLog.StockLogType.IN) {
+            stock.setQuantity(stock.getQuantity() + quantity);
+        } else if (type == StockLog.StockLogType.OUT) {
+            if (stock.getQuantity() < quantity) {
+                throw new InsufficientStockException("Stock insuficiente. Cantidad disponible: " + stock.getQuantity() + ", cantidad solicitada: " + quantity);
             }
-            stock.setQuantity(stock.getQuantity() - stockRecord.getQuantity());
+            stock.setQuantity(stock.getQuantity() - quantity);
         }
         // Update measure unit equivalent
         if (stock.getQuantity() > 0) {
             Double equivalent = stock.getQuantity() * product.getMeasurePerSaleUnit();
             stock.setMeasureUnitEquivalent(equivalent);
         }
-        // Set the date if not provided
-        if (stockRecord.getDate() == null) {
-            stockRecord.setDate(LocalDate.now());
-        }
-        // Add record to record list
-        stock.getRecordList().add(stockRecord);
         productRepository.save(product);
+        // Register the movement in the document based stock log
+        stockLogService.registerMovement(product, type, quantity, detail, date != null ? date : LocalDate.now());
         return product;
     }
 

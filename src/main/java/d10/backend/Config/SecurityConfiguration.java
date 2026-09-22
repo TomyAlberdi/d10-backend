@@ -30,7 +30,7 @@ public class SecurityConfiguration {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://192.168.0.227:5173", "https://www.d10-admin.online", "https://d10-admin.online", "https://www.d10-tandil-admin.online", "https://d10-tandil-admin.online"));
+        config.setAllowedOrigins(List.of("http://localhost:5173", "http://192.168.0.227:5173", "https://www.d10-admin.online", "https://d10-admin.online", "https://www.d10-tandil-admin.online", "https://d10-tandil-admin.online", "https://d10-frontend-git-dev-tomyalberdis-projects.vercel.app"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
         source.registerCorsConfiguration("/**", config);

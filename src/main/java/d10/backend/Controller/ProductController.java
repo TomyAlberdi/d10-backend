@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.Product.CreateProductDTO;
-import d10.backend.Model.ProductStockRecord;
+import d10.backend.DTO.Product.UpdateProductStockDTO;
 import d10.backend.Service.ProductService;
 import lombok.RequiredArgsConstructor;
 
@@ -82,8 +82,13 @@ public class ProductController {
     @PatchMapping("/{id}/stock")
     public ResponseEntity<?> updateStock(
             @PathVariable String id,
-            @RequestBody ProductStockRecord stockRecord) {
-        return ResponseEntity.ok(productService.updateStock(id, stockRecord));
+            @RequestBody UpdateProductStockDTO stockUpdate) {
+        return ResponseEntity.ok(productService.updateStock(
+                id,
+                stockUpdate.getType(),
+                stockUpdate.getQuantity(),
+                stockUpdate.getDate(),
+                stockUpdate.getDetail()));
     }
 
     @PatchMapping("/update-price")

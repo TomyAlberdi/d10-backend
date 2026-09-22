@@ -14,7 +14,13 @@ public interface ProductRepository extends MongoRepository<Product, String> {
     List<Product> findByName(String name);
     List<Product> findByStockQuantityGreaterThan(Integer quantity);
     List<Product> findByProviderName(String providerName);
-    
+
+    /** Used by the category ranking to resolve the products of a category in one query. */
+    List<Product> findByCategoryIgnoreCase(String category);
+
+    /** Used by the subcategory ranking to resolve the products of a subcategory in one query. */
+    List<Product> findBySubcategoryIgnoreCase(String subcategory);
+
     @Query(value = "{ 'discontinued': false }", fields = "{ 'providerName': 1 }")
     List<Product> findDistinctProviders();
 }

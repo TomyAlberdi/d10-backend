@@ -14,7 +14,7 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 
 	List<Invoice> findByClientCuitDniContainingIgnoreCaseOrClientNameContainingIgnoreCase(String cuitDni, String name);
 
-	List<Invoice> findTop15ByOrderByDateDescInvoiceNumberDesc();
+	List<Invoice> findTop25ByOrderByDateDescInvoiceNumberDesc();
 
 	Optional<Invoice> findTopByOrderByInvoiceNumberDesc();
 

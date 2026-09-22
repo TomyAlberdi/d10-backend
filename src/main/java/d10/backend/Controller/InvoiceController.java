@@ -1,5 +1,8 @@
 package d10.backend.Controller;
 
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,8 +48,12 @@ public class InvoiceController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<?> search(@RequestParam(name = "q", required = false) String q, @RequestParam(name = "status", required = false) Invoice.Status status) {
-        return ResponseEntity.ok(invoiceService.searchInvoices(q, status));
+    public ResponseEntity<?> search(
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "status", required = false) Invoice.Status status,
+            @RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(invoiceService.searchInvoices(q, status, from, to));
     }
 
     @GetMapping("/stock-not-decreased")
