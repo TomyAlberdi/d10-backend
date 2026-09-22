@@ -159,7 +159,8 @@ public class CashRegisterService {
     }
 
     /**
-     * Returns paginated transactions for a given date range and optional register type.
+     * Returns paginated transactions for a given date range, optional register type
+     * (PAPER/DIGITAL/USD) and optional direction (IN/OUT).
      * Default page size is 50.
      * If date is null, returns all transactions.
      * Transactions are ordered by date with most recent first.
@@ -167,6 +168,7 @@ public class CashRegisterService {
     public Page<CashRegisterTransactionDTO> listTransactionsPaginated(
             LocalDate date,
             CashRegister.CashRegisterType type,
+            CashRegisterTransaction.TransactionType direction,
             int page,
             int size) {
         // Use default size of 50 if not specified or if size is 0
@@ -176,12 +178,18 @@ public class CashRegisterService {
         Pageable pageable = PageRequest.of(page, size, Sort.by("dateTime").descending());
 
         Page<CashRegisterTransaction> transactions;
-        
+
         // If date is null, fetch all transactions
         if (date == null) {
-            if (type != null) {
+            if (type != null && direction != null) {
+                transactions = transactionRepository
+                        .findByRegisterTypeAndTypeOrderByDateTimeAsc(type, direction, pageable);
+            } else if (type != null) {
                 transactions = transactionRepository
                         .findByRegisterTypeOrderByDateTimeAsc(type, pageable);
+            } else if (direction != null) {
+                transactions = transactionRepository
+                        .findByTypeOrderByDateTimeAsc(direction, pageable);
             } else {
                 transactions = transactionRepository
                         .findAllByOrderByDateTimeAsc(pageable);
@@ -190,9 +198,15 @@ public class CashRegisterService {
             // Otherwise, fetch transactions for the specific date
             LocalDateTime start = date.atStartOfDay();
             LocalDateTime end = LocalDateTime.of(date, LocalTime.MAX);
-            if (type != null) {
+            if (type != null && direction != null) {
+                transactions = transactionRepository
+                        .findByDateTimeBetweenAndRegisterTypeAndTypeOrderByDateTimeAsc(start, end, type, direction, pageable);
+            } else if (type != null) {
                 transactions = transactionRepository
                         .findByDateTimeBetweenAndRegisterTypeOrderByDateTimeAsc(start, end, type, pageable);
+            } else if (direction != null) {
+                transactions = transactionRepository
+                        .findByDateTimeBetweenAndTypeOrderByDateTimeAsc(start, end, direction, pageable);
             } else {
                 transactions = transactionRepository
                         .findByDateTimeBetweenOrderByDateTimeAsc(start, end, pageable);
