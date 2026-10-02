@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -89,6 +90,7 @@ public class InvoiceService {
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO, boolean allowNegativeStock) {
         Invoice invoice = findById(id);
+        checkClientUnchangedOnDebt(invoice, createInvoiceDTO);
         // The incoming lines come from the frontend and carry no cost
         // snapshot, so the stored ones are kept aside before the mapper
         // replaces the whole product list.
@@ -134,6 +136,21 @@ public class InvoiceService {
         applyDebtStatus(invoice);
         invoiceRepository.save(invoice);
         return invoice;
+    }
+
+    /**
+     * A debt was charged to its client's balance when it was created, and an
+     * edit does not move that charge, so the client of a debt stays fixed.
+     */
+    private static void checkClientUnchangedOnDebt(Invoice invoice, CreateInvoiceDTO dto) {
+        if (invoice.getStatus() != Invoice.Status.DEUDA) {
+            return;
+        }
+        String currentClientId = invoice.getClient() != null ? invoice.getClient().getId() : null;
+        String requestedClientId = dto.getClient() != null ? dto.getClient().getId() : null;
+        if (!Objects.equals(currentClientId, requestedClientId)) {
+            throw new IllegalStateException("No se puede cambiar el cliente de una venta con deuda.");
+        }
     }
 
     /** Sale units each product of the invoice takes out, lines of the same product summed. */
