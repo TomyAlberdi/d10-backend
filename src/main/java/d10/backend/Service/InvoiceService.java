@@ -12,8 +12,8 @@ import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import d10.backend.DTO.CashRegister.CreateCashRegisterTransactionDTO;
 import d10.backend.DTO.Invoice.CreateInvoiceDTO;
+import d10.backend.DTO.Invoice.InvoicePaymentDTO;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.InvoiceMapper;
 import d10.backend.Model.CashRegister;
@@ -69,73 +69,205 @@ public class InvoiceService {
     }
 
     public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO, boolean allowNegativeStock) {
+        ResolvedPayment payment = resolvePayment(createInvoiceDTO.getPayment(), createInvoiceDTO.getStatus());
+
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
         invoice.setInvoiceNumber(generateNextInvoiceNumber());
         stampCostSnapshot(invoice);
-        if (invoice.getStatus() == Invoice.Status.ENTREGADO || invoice.getStockDecreased().equals(true)) {
+        boolean takesStock = invoice.getStatus() == Invoice.Status.ENTREGADO
+                || Boolean.TRUE.equals(invoice.getStockDecreased());
+        invoice.setStockDecreased(takesStock);
+        applyPayment(invoice, 0.0, payment);
+        applyDebtStatus(invoice);
+        checkSettledIsCollected(invoice, 0.0, payment);
+        if (takesStock) {
             productService.checkNegativeStock(requiredStock(invoice.getProducts()), allowNegativeStock);
+        }
+
+        // Every check passed: write.
+        if (takesStock) {
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
-            invoice.setStockDecreased(true);
         }
-        applyDebtStatus(invoice);
-        applyClientBalanceEffects(invoice);
         invoiceRepository.save(invoice);
-        /*         if ((invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO) && invoice.getPaymentMethod() != null) {
-            addPaymentToCashRegister(invoice);
-        } */
+        registerPayment(invoice, payment);
+        applySettledCredit(invoice);
+        syncClientDebt(null, 0.0, invoice);
         return invoice;
     }
 
     public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO, boolean allowNegativeStock) {
         Invoice invoice = findById(id);
         checkClientUnchangedOnDebt(invoice, createInvoiceDTO);
+        ResolvedPayment payment = resolvePayment(createInvoiceDTO.getPayment(), createInvoiceDTO.getStatus());
+
+        // The sale as it was, for the stock and balance differences below.
+        String clientIdBefore = clientIdOf(invoice);
+        double owedBefore = owed(invoice);
+        double paidBefore = invoice.getPartialPayment() != null ? invoice.getPartialPayment() : 0.0;
+        boolean stockTakenBefore = Boolean.TRUE.equals(invoice.getStockDecreased());
+        Map<String, Integer> stockBefore = requiredStock(invoice.getProducts());
+        Map<String, Integer> stockAfter = requiredStock(createInvoiceDTO.getProducts());
+        boolean cancelling = createInvoiceDTO.getStatus() == Invoice.Status.CANCELADO;
+        boolean takesStockNow = !stockTakenBefore && !cancelling
+                && (Boolean.TRUE.equals(createInvoiceDTO.getStockDecreased())
+                        || createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO);
+        Map<CashRegister.CashRegisterType, Double> refunds = cancelling && Boolean.TRUE.equals(createInvoiceDTO.getRefundPayments())
+                ? cashRegisterService.netCollectedByRegister(invoice.getId())
+                : Map.of();
+
         // The incoming lines come from the frontend and carry no cost
         // snapshot, so the stored ones are kept aside before the mapper
         // replaces the whole product list.
         Map<String, Double> storedCosts = costSnapshotsByProduct(invoice);
-        boolean restoredStockForCancellation = false;
-        if (Boolean.TRUE.equals(invoice.getStockDecreased()) && createInvoiceDTO.getStatus() == Invoice.Status.CANCELADO) {
-            if (invoice.getProducts() != null) {
-                for (InvoiceProduct ip : invoice.getProducts()) {
-                    int qty = ip.getSaleUnitQuantity() != null ? ip.getSaleUnitQuantity() : 0;
-                    if (qty <= 0) {
-                        continue;
-                    }
-                    productService.updateStockIncrease(
-                            ip.getId(),
-                            qty,
-                            invoice.getDate() != null ? invoice.getDate() : LocalDate.now(),
-                            cancelledSaleStockDetail(invoice));
-                }
-            }
-            invoice.setStockDecreased(false);
-            restoredStockForCancellation = true;
-        }
-        boolean shouldUpdateStock = !invoice.getStockDecreased() && ((createInvoiceDTO.getStockDecreased().equals(true)) || (createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO));
-        if (shouldUpdateStock) {
-            productService.checkNegativeStock(requiredStock(createInvoiceDTO.getProducts()), allowNegativeStock);
-            for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
-                productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
-            }
-            invoice.setStockDecreased(true);
-        }
-        /*         Invoice.Status newStatus = createInvoiceDTO.getStatus();
-        boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
-        boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
-        if ((isSetToPaid && !isAlreayPaid) && invoice.getPaymentMethod() != null) {
-            addPaymentToCashRegister(invoice);
-        } */
         InvoiceMapper.updateFromDTO(invoice, createInvoiceDTO);
         restoreCostSnapshots(invoice, storedCosts);
         stampCostSnapshot(invoice);
-        if (restoredStockForCancellation) {
-            invoice.setStockDecreased(false);
-        }
+        invoice.setStockDecreased(cancelling ? false : stockTakenBefore || takesStockNow);
+        applyPayment(invoice, paidBefore, payment);
         applyDebtStatus(invoice);
+        checkSettledIsCollected(invoice, owedBefore, payment);
+
+        // Stock: give everything back on cancel, take everything when the sale
+        // first takes stock, or move only the difference on an edit.
+        Map<String, Integer> toTake = new LinkedHashMap<>();
+        Map<String, Integer> toGiveBack = new LinkedHashMap<>();
+        if (stockTakenBefore && cancelling) {
+            toGiveBack.putAll(stockBefore);
+        } else if (takesStockNow) {
+            toTake.putAll(stockAfter);
+        } else if (stockTakenBefore) {
+            stockAfter.forEach((productId, qty) -> {
+                int diff = qty - stockBefore.getOrDefault(productId, 0);
+                if (diff > 0) {
+                    toTake.put(productId, diff);
+                }
+            });
+            stockBefore.forEach((productId, qty) -> {
+                int diff = qty - stockAfter.getOrDefault(productId, 0);
+                if (diff > 0) {
+                    toGiveBack.put(productId, diff);
+                }
+            });
+        }
+        productService.checkNegativeStock(toTake, allowNegativeStock);
+
+        // Every check passed: write.
+        LocalDate stockDate = invoice.getDate() != null ? invoice.getDate() : LocalDate.now();
+        String takeDetail = takesStockNow ? saleStockDetail(invoice) : editedSaleStockDetail(invoice);
+        String giveBackDetail = cancelling ? cancelledSaleStockDetail(invoice) : editedSaleStockDetail(invoice);
+        toTake.forEach((productId, qty) -> productService.updateStockDecrease(productId, qty, stockDate, takeDetail));
+        toGiveBack.forEach((productId, qty) -> productService.updateStockIncrease(productId, qty, stockDate, giveBackDetail));
         invoiceRepository.save(invoice);
+        registerPayment(invoice, payment);
+        refunds.forEach((registerType, net) -> {
+            if (net >= PAYMENT_TOLERANCE) {
+                cashRegisterService.createInvoiceTransaction(invoice, net, registerType,
+                        CashRegisterTransaction.TransactionType.OUT);
+            }
+        });
+        syncClientDebt(clientIdBefore, owedBefore, invoice);
         return invoice;
+    }
+
+    /** A request's payment after validation; amounts are never null. */
+    private record ResolvedPayment(double registerAmount, CashRegister.CashRegisterType registerType,
+            double countedAmount, boolean partial) {
+    }
+
+    /** Statuses a payment can be registered with. */
+    private static final Set<Invoice.Status> COLLECTABLE_STATUSES =
+            EnumSet.of(Invoice.Status.PAGO, Invoice.Status.ENVIADO, Invoice.Status.ENTREGADO, Invoice.Status.DEUDA);
+
+    /**
+     * Checks the payment sent with a sale before anything is written. Returns
+     * null when there is none.
+     */
+    private static ResolvedPayment resolvePayment(InvoicePaymentDTO dto, Invoice.Status status) {
+        if (dto == null) {
+            return null;
+        }
+        if (!COLLECTABLE_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("Solo se puede registrar un cobro en una venta pagada, entregada o con deuda.");
+        }
+        if (dto.getRegisterType() == null) {
+            throw new IllegalArgumentException("Elegí la caja donde entra el cobro.");
+        }
+        boolean partial = Boolean.TRUE.equals(dto.getPartial());
+        double amount = dto.getAmount() != null ? dto.getAmount() : 0.0;
+        if (amount < 0 || (!partial && amount <= 0)) {
+            throw new IllegalArgumentException("El monto cobrado debe ser mayor a 0.");
+        }
+        double counted = amount;
+        if (dto.getRegisterType() == CashRegister.CashRegisterType.USD && partial) {
+            double pesos = dto.getPesoAmount() != null ? dto.getPesoAmount() : -1;
+            if (amount > 0 && pesos < 0) {
+                throw new IllegalArgumentException("Indicá cuántos pesos cubre el pago en USD.");
+            }
+            counted = Math.max(0, pesos);
+        }
+        return new ResolvedPayment(amount, dto.getRegisterType(), counted, partial);
+    }
+
+    /**
+     * Sets what the sale counts as paid. A full payment settles it, whatever
+     * was actually handed over; a partial one adds the amount it covers and
+     * leaves the rest as a debt. Without a payment the paid amount is the one
+     * stored before, never the one sent by the frontend.
+     */
+    private static void applyPayment(Invoice invoice, double paidBefore, ResolvedPayment payment) {
+        double total = invoice.getTotal() != null ? invoice.getTotal() : 0.0;
+        if (payment == null) {
+            invoice.setPartialPayment(Math.min(total, paidBefore));
+            return;
+        }
+        invoice.setPaymentMethod(paymentMethodOf(payment.registerType()));
+        double paid = payment.partial() ? Math.min(total, paidBefore + payment.countedAmount()) : total;
+        invoice.setPartialPayment(paid);
+        if (total - paid >= PAYMENT_TOLERANCE) {
+            invoice.setStatus(Invoice.Status.DEUDA);
+        } else if (invoice.getStatus() == Invoice.Status.DEUDA) {
+            // A debt paid off: delivered if its stock already left, paid otherwise.
+            invoice.setStatus(Boolean.TRUE.equals(invoice.getStockDecreased())
+                    ? Invoice.Status.ENTREGADO
+                    : Invoice.Status.PAGO);
+        }
+    }
+
+    /**
+     * A settled sale must have its money registered: one that ends up owing
+     * more than it did before, without a payment in the same request, is
+     * rejected instead of being saved as paid.
+     */
+    private static void checkSettledIsCollected(Invoice invoice, double owedBefore, ResolvedPayment payment) {
+        if (payment != null || !SETTLED_STATUSES.contains(invoice.getStatus())) {
+            return;
+        }
+        double total = invoice.getTotal() != null ? invoice.getTotal() : 0.0;
+        double paid = invoice.getPartialPayment() != null ? invoice.getPartialPayment() : 0.0;
+        double unpaid = total - paid;
+        if (unpaid >= PAYMENT_TOLERANCE && unpaid - owedBefore >= PAYMENT_TOLERANCE) {
+            throw new IllegalArgumentException("Registrá el cobro de la venta para marcarla como pagada.");
+        }
+    }
+
+    /** Writes the payment's transaction, linked to the sale. */
+    private void registerPayment(Invoice invoice, ResolvedPayment payment) {
+        if (payment == null || payment.registerAmount() <= 0) {
+            return;
+        }
+        cashRegisterService.createInvoiceTransaction(invoice, payment.registerAmount(), payment.registerType(),
+                CashRegisterTransaction.TransactionType.IN);
+    }
+
+    private static Invoice.PaymentMethod paymentMethodOf(CashRegister.CashRegisterType registerType) {
+        // Exhaustive switch: a new register fails to compile until it is mapped.
+        return switch (registerType) {
+            case PAPER -> Invoice.PaymentMethod.CASH;
+            case DIGITAL -> Invoice.PaymentMethod.DIGITAL;
+            case USD -> Invoice.PaymentMethod.USD;
+        };
     }
 
     /**
@@ -231,11 +363,6 @@ public class InvoiceService {
         invoice.setStatus(newStatus);
         applyDebtStatus(invoice);
         invoiceRepository.save(invoice);
-        /*         boolean isSetToPaid = newStatus == Invoice.Status.PAGO || newStatus == Invoice.Status.ENVIADO || newStatus == Invoice.Status.ENTREGADO;
-        boolean isAlreayPaid = invoice.getStatus() == Invoice.Status.PAGO || invoice.getStatus() == Invoice.Status.ENVIADO || invoice.getStatus() == Invoice.Status.ENTREGADO;
-        if ((isSetToPaid && !isAlreayPaid) && invoice.getPaymentMethod() != null) {
-            addPaymentToCashRegister(invoice);
-        } */
         return invoice;
     }
 
@@ -257,30 +384,59 @@ public class InvoiceService {
     }
 
     /**
-     * Keeps a client's balance in sync with a newly created invoice: a debt
-     * subtracts the amount still owed, and a fully paid sale consumes the
-     * credit balance that was discounted from its total. Nothing happens for
-     * statuses that are neither settled nor a debt (e.g. a pending budget),
-     * since the sale has not affected the client's money yet.
+     * A settled sale consumes the credit balance that was discounted from its
+     * total, clamped to what the client actually has. Only on creation.
      */
-    private void applyClientBalanceEffects(Invoice invoice) {
-        if (invoice.getClient() == null || invoice.getClient().getId() == null) {
+    private void applySettledCredit(Invoice invoice) {
+        String clientId = clientIdOf(invoice);
+        if (clientId == null || !SETTLED_STATUSES.contains(invoice.getStatus())) {
             return;
         }
-        Client client = clientService.findById(invoice.getClient().getId());
+        Client client = clientService.findById(clientId);
         double clientBalance = client.getBalance() != null ? client.getBalance() : 0.0;
-        if (SETTLED_STATUSES.contains(invoice.getStatus())) {
-            double requestedDiscount = invoice.getBalanceApplied() != null ? invoice.getBalanceApplied() : 0.0;
-            double consumed = Math.max(0, Math.min(requestedDiscount, Math.max(0, clientBalance)));
-            if (consumed > 0) {
-                clientService.adjustBalance(client.getId(), -consumed);
-            }
-        } else if (invoice.getStatus() == Invoice.Status.DEUDA) {
-            double total = invoice.getTotal() != null ? invoice.getTotal() : 0.0;
-            if (total > 0) {
-                clientService.adjustBalance(client.getId(), -total);
-            }
+        double requestedDiscount = invoice.getBalanceApplied() != null ? invoice.getBalanceApplied() : 0.0;
+        double consumed = Math.max(0, Math.min(requestedDiscount, Math.max(0, clientBalance)));
+        if (consumed > 0) {
+            clientService.adjustBalance(clientId, -consumed);
         }
+    }
+
+    /** What a sale's client still owes for it: only a debt with a client owes. */
+    private static double owed(Invoice invoice) {
+        if (invoice.getStatus() != Invoice.Status.DEUDA || clientIdOf(invoice) == null) {
+            return 0.0;
+        }
+        double total = invoice.getTotal() != null ? invoice.getTotal() : 0.0;
+        double paid = invoice.getPartialPayment() != null ? invoice.getPartialPayment() : 0.0;
+        return Math.max(0, total - paid);
+    }
+
+    /**
+     * Keeps the client's balance equal to what their debts owe: the amount the
+     * sale owed before is given back to whoever owed it, and what it owes now
+     * is charged to its client. Covers new debts, payments on a debt, totals
+     * that change on a debt and debts that are cancelled or paid off.
+     */
+    private void syncClientDebt(String clientIdBefore, double owedBefore, Invoice invoice) {
+        String clientIdAfter = clientIdOf(invoice);
+        double owedAfter = owed(invoice);
+        if (Objects.equals(clientIdBefore, clientIdAfter)) {
+            double delta = owedAfter - owedBefore;
+            if (clientIdAfter != null && Math.abs(delta) >= PAYMENT_TOLERANCE) {
+                clientService.adjustBalance(clientIdAfter, -delta);
+            }
+            return;
+        }
+        if (clientIdBefore != null && owedBefore >= PAYMENT_TOLERANCE) {
+            clientService.adjustBalance(clientIdBefore, owedBefore);
+        }
+        if (clientIdAfter != null && owedAfter >= PAYMENT_TOLERANCE) {
+            clientService.adjustBalance(clientIdAfter, -owedAfter);
+        }
+    }
+
+    private static String clientIdOf(Invoice invoice) {
+        return invoice.getClient() != null ? invoice.getClient().getId() : null;
     }
 
     /**
@@ -360,29 +516,18 @@ public class InvoiceService {
     }
 
     /**
+     * Detail stored in the stock log when an edit changes the products of a
+     * sale that had already taken its stock.
+     */
+    private String editedSaleStockDetail(Invoice invoice) {
+        return invoice.getInvoiceNumber() != null ? "Edición venta #" + invoice.getInvoiceNumber() : "Edición de venta";
+    }
+
+    /**
      * Detail stored in the stock log when a cancelled invoice gives its products back.
      */
     private String cancelledSaleStockDetail(Invoice invoice) {
         return invoice.getInvoiceNumber() != null ? "Cancelación venta #" + invoice.getInvoiceNumber() : "Cancelación de venta";
-    }
-
-    private void addPaymentToCashRegister(Invoice invoice) {
-        if (invoice.getPaymentMethod() == null) {
-            return;
-        }
-        // Exhaustive switch: a new payment method fails to compile until it is
-        // mapped to the register it feeds.
-        CashRegister.CashRegisterType registerType = switch (invoice.getPaymentMethod()) {
-            case CASH -> CashRegister.CashRegisterType.PAPER;
-            case DIGITAL -> CashRegister.CashRegisterType.DIGITAL;
-            case USD -> CashRegister.CashRegisterType.USD;
-        };
-        CreateCashRegisterTransactionDTO dto = new CreateCashRegisterTransactionDTO();
-        dto.setAmount(invoice.getTotal());
-        dto.setType(CashRegisterTransaction.TransactionType.IN);
-        dto.setDescription("Pago de venta " + invoice.getInvoiceNumber());
-        dto.setRegisterType(registerType);
-        cashRegisterService.createTransaction(dto);
     }
 
 }

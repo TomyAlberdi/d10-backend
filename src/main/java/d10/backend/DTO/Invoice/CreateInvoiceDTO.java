@@ -25,4 +25,8 @@ public class CreateInvoiceDTO {
     private Double partialPayment;
     private Invoice.PaymentMethod paymentMethod;
     private Double balanceApplied;
+    /** Money received with this save, if any; registered in the cash register. */
+    private InvoicePaymentDTO payment;
+    /** On cancelling: give back in the cash register what the sale collected. */
+    private Boolean refundPayments;
 }

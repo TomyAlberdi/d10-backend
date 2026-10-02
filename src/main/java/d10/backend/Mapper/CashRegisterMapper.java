@@ -49,7 +49,9 @@ public class CashRegisterMapper {
                 transaction.getType(),
                 transaction.getDescription(),
                 transaction.getDateTime(),
-                transaction.getRegisterType()
+                transaction.getRegisterType(),
+                transaction.getInvoiceId(),
+                transaction.getInvoiceNumber()
         );
     }
 

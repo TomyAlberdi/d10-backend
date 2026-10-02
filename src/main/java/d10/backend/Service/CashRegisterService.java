@@ -3,7 +3,9 @@ package d10.backend.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -21,6 +23,7 @@ import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.CashRegisterMapper;
 import d10.backend.Model.CashRegister;
 import d10.backend.Model.CashRegisterTransaction;
+import d10.backend.Model.Invoice;
 import d10.backend.Repository.CashRegisterRepository;
 import d10.backend.Repository.CashRegisterTransactionRepository;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +75,52 @@ public class CashRegisterService {
      * it moves between cash and digital. USD holds another currency, so a
      * transaction never moves in or out of it.
      */
+    /**
+     * Records money a sale brought in (IN) or gave back (OUT), linked to the
+     * sale so each one can list the other.
+     */
+    public CashRegisterTransaction createInvoiceTransaction(Invoice invoice, double amount,
+            CashRegister.CashRegisterType registerType, CashRegisterTransaction.TransactionType type) {
+        validateAmount(amount);
+        CashRegister register = getOrCreateRegister(registerType);
+        register.setCurrentAmount(register.getCurrentAmount() + getSignedAmount(amount, type));
+        cashRegisterRepository.save(register);
+
+        CashRegisterTransaction transaction = new CashRegisterTransaction();
+        transaction.setAmount(amount);
+        transaction.setType(type);
+        transaction.setDescription((type == CashRegisterTransaction.TransactionType.OUT ? "Devolución venta #" : "Venta #")
+                + invoice.getInvoiceNumber());
+        transaction.setDateTime(LocalDateTime.now());
+        transaction.setRegisterType(registerType);
+        transaction.setInvoiceId(invoice.getId());
+        transaction.setInvoiceNumber(invoice.getInvoiceNumber());
+        return transactionRepository.save(transaction);
+    }
+
+    /** Transactions linked to a sale, oldest first. */
+    public List<CashRegisterTransaction> findEntitiesByInvoiceId(String invoiceId) {
+        return transactionRepository.findByInvoiceIdOrderByDateTimeAsc(invoiceId);
+    }
+
+    public List<CashRegisterTransactionDTO> findByInvoiceId(String invoiceId) {
+        return findEntitiesByInvoiceId(invoiceId).stream()
+                .map(CashRegisterMapper::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Net amount a sale's transactions left in each register (IN − OUT),
+     * keyed by register. Untyped transactions count as PAPER.
+     */
+    public Map<CashRegister.CashRegisterType, Double> netCollectedByRegister(String invoiceId) {
+        Map<CashRegister.CashRegisterType, Double> net = new EnumMap<>(CashRegister.CashRegisterType.class);
+        for (CashRegisterTransaction t : findEntitiesByInvoiceId(invoiceId)) {
+            net.merge(registerTypeOf(t), getSignedAmount(t.getAmount(), t.getType()), Double::sum);
+        }
+        return net;
+    }
+
     public CashRegisterTransactionDTO updateTransaction(String id, CreateCashRegisterTransactionDTO dto) {
         validateAmount(dto.getAmount());
         if (dto.getType() == null) {
@@ -180,7 +229,7 @@ public class CashRegisterService {
                 : CashRegister.CashRegisterType.PAPER;
     }
 
-    private void validateAmount(Double amount) {
+    private static void validateAmount(Double amount) {
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("El monto de la transacción debe ser mayor a 0.");
         }

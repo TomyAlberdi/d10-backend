@@ -26,6 +26,8 @@ public class CashRegisterTransactionDTO {
     private LocalDateTime dateTime;
 
     private CashRegister.CashRegisterType registerType;
+    private String invoiceId;
+    private String invoiceNumber;
 
 }
 

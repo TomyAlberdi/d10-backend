@@ -56,6 +56,14 @@ public class CashRegisterController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Transactions linked to a sale, oldest first.
+     */
+    @GetMapping("/transactions/invoice/{invoiceId}")
+    public ResponseEntity<List<CashRegisterTransactionDTO>> listTransactionsByInvoice(@PathVariable String invoiceId) {
+        return ResponseEntity.ok(cashRegisterService.findByInvoiceId(invoiceId));
+    }
+
     @GetMapping("/transactions")
     public ResponseEntity<List<CashRegisterTransactionDTO>> listTransactionsByDate(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
