@@ -65,20 +65,45 @@ public class CashRegisterService {
         return CashRegisterMapper.toDTO(transaction);
     }
 
+    /**
+     * Edits the direction, amount, description and register of a transaction.
+     * The old amount is taken back from the register it was recorded in and
+     * the new one applied to the register it ends up in, the same one unless
+     * it moves between cash and digital. USD holds another currency, so a
+     * transaction never moves in or out of it.
+     */
     public CashRegisterTransactionDTO updateTransaction(String id, CreateCashRegisterTransactionDTO dto) {
         validateAmount(dto.getAmount());
+        if (dto.getType() == null) {
+            throw new IllegalArgumentException("El tipo de transacción es obligatorio.");
+        }
         CashRegisterTransaction existing = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transacción de caja con ID " + id + " no encontrada."));
 
-        CashRegister register = getOrCreateRegister(dto.getRegisterType());
+        CashRegister.CashRegisterType oldType = registerTypeOf(existing);
+        CashRegister.CashRegisterType newType = dto.getRegisterType() != null ? dto.getRegisterType() : oldType;
+        if (oldType != newType
+                && (oldType == CashRegister.CashRegisterType.USD || newType == CashRegister.CashRegisterType.USD)) {
+            throw new IllegalArgumentException("Una transacción no puede pasar de USD a pesos ni de pesos a USD.");
+        }
 
         double oldSigned = getSignedAmount(existing.getAmount(), existing.getType());
         double newSigned = getSignedAmount(dto.getAmount(), dto.getType());
 
-        register.setCurrentAmount(register.getCurrentAmount() - oldSigned + newSigned);
-        cashRegisterRepository.save(register);
+        CashRegister oldRegister = getOrCreateRegister(oldType);
+        if (oldType == newType) {
+            oldRegister.setCurrentAmount(oldRegister.getCurrentAmount() - oldSigned + newSigned);
+            cashRegisterRepository.save(oldRegister);
+        } else {
+            CashRegister newRegister = getOrCreateRegister(newType);
+            oldRegister.setCurrentAmount(oldRegister.getCurrentAmount() - oldSigned);
+            newRegister.setCurrentAmount(newRegister.getCurrentAmount() + newSigned);
+            cashRegisterRepository.save(oldRegister);
+            cashRegisterRepository.save(newRegister);
+        }
 
         CashRegisterMapper.updateFromDTO(existing, dto);
+        existing.setRegisterType(newType);
         existing = transactionRepository.save(existing);
 
         return CashRegisterMapper.toDTO(existing);
@@ -88,7 +113,7 @@ public class CashRegisterService {
         CashRegisterTransaction existing = transactionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Transacción de caja con ID " + id + " no encontrada."));
 
-        CashRegister register = getOrCreateRegister(existing.getRegisterType());
+        CashRegister register = getOrCreateRegister(registerTypeOf(existing));
         double oldSigned = getSignedAmount(existing.getAmount(), existing.getType());
         register.setCurrentAmount(register.getCurrentAmount() - oldSigned);
         cashRegisterRepository.save(register);
@@ -143,6 +168,16 @@ public class CashRegisterService {
             }
         }
         return new CashRegisterDailyTotalsDTO(inTotal, outTotal);
+    }
+
+    /**
+     * Transactions written before the registers were split carry no register
+     * type; they belong to the cash (PAPER) register.
+     */
+    private static CashRegister.CashRegisterType registerTypeOf(CashRegisterTransaction transaction) {
+        return transaction.getRegisterType() != null
+                ? transaction.getRegisterType()
+                : CashRegister.CashRegisterType.PAPER;
     }
 
     private void validateAmount(Double amount) {

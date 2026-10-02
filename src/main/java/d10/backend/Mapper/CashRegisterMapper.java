@@ -35,7 +35,8 @@ public class CashRegisterMapper {
         transaction.setAmount(dto.getAmount());
         transaction.setType(dto.getType());
         transaction.setDescription(dto.getDescription());
-        transaction.setRegisterType(dto.getRegisterType());
+        // The register is set by CashRegisterService, which also moves the
+        // amounts between registers and keeps USD apart.
     }
 
     public static CashRegisterTransactionDTO toDTO(CashRegisterTransaction transaction) {
