@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Claude Code ###
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
