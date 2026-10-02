@@ -32,13 +32,18 @@ public class InvoiceController {
     }
 
     @PostMapping
-    public ResponseEntity<?> save(@RequestBody CreateInvoiceDTO createInvoiceDTO) {
-        return ResponseEntity.ok(invoiceService.createInvoice(createInvoiceDTO));
+    public ResponseEntity<?> save(
+            @RequestBody CreateInvoiceDTO createInvoiceDTO,
+            @RequestParam(value = "allowNegativeStock", defaultValue = "false") boolean allowNegativeStock) {
+        return ResponseEntity.ok(invoiceService.createInvoice(createInvoiceDTO, allowNegativeStock));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable String id, @RequestBody CreateInvoiceDTO createInvoiceDTO) {
-        return ResponseEntity.ok(invoiceService.updateInvoice(id, createInvoiceDTO));
+    public ResponseEntity<?> update(
+            @PathVariable String id,
+            @RequestBody CreateInvoiceDTO createInvoiceDTO,
+            @RequestParam(value = "allowNegativeStock", defaultValue = "false") boolean allowNegativeStock) {
+        return ResponseEntity.ok(invoiceService.updateInvoice(id, createInvoiceDTO, allowNegativeStock));
     }
 
     @DeleteMapping("/{id}")
@@ -62,8 +67,11 @@ public class InvoiceController {
     }
 
     @PutMapping("/{id}/status")
-    public ResponseEntity<?> updateStatus(@PathVariable String id, @RequestParam(name = "status", required = true) Invoice.Status status) {
-        return ResponseEntity.ok(invoiceService.updateInvoiceStatus(id, status));
+    public ResponseEntity<?> updateStatus(
+            @PathVariable String id,
+            @RequestParam(name = "status", required = true) Invoice.Status status,
+            @RequestParam(value = "allowNegativeStock", defaultValue = "false") boolean allowNegativeStock) {
+        return ResponseEntity.ok(invoiceService.updateInvoiceStatus(id, status, allowNegativeStock));
     }
 
     @GetMapping("/product/{productId}")

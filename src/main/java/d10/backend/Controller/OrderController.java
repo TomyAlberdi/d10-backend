@@ -51,8 +51,9 @@ public class OrderController {
     @PatchMapping("/{id}/received")
     public ResponseEntity<?> updateReceived(
             @PathVariable String id,
-            @RequestParam(value = "received", defaultValue = "true") boolean received) {
-        return ResponseEntity.ok(orderService.updateReceived(id, received));
+            @RequestParam(value = "received", defaultValue = "true") boolean received,
+            @RequestParam(value = "allowNegativeStock", defaultValue = "false") boolean allowNegativeStock) {
+        return ResponseEntity.ok(orderService.updateReceived(id, received, allowNegativeStock));
     }
 
     @DeleteMapping("/{id}")

@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.Product.CreateProductDTO;
+import d10.backend.DTO.Product.StockShortageDTO;
 import d10.backend.Exception.InsufficientStockException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProductMapper;
@@ -96,17 +97,45 @@ public class ProductService {
         return product;
     }
 
-    public void checkStockSufficient(String productId, int requiredQuantity) {
-        Product product = findById(productId);
+    /**
+     * Fails, unless {@code allowNegativeStock} is set, when taking the given
+     * sale units out would leave any product below zero. Every product is
+     * checked before failing, so the user confirms them all at once.
+     *
+     * @param requiredByProduct sale units to take out, keyed by product id;
+     * a product on several lines must be summed beforehand
+     */
+    public void checkNegativeStock(Map<String, Integer> requiredByProduct, boolean allowNegativeStock) {
+        if (allowNegativeStock) {
+            return;
+        }
+        List<StockShortageDTO> shortages = new ArrayList<>();
+        requiredByProduct.forEach((productId, required) -> {
+            if (required == null || required <= 0) {
+                return;
+            }
+            Product product = findById(productId);
+            int available = currentQuantity(product);
+            if (available < required) {
+                shortages.add(new StockShortageDTO(product.getId(), product.getName(),
+                        product.getSaleUnitType(), available, required, available - required));
+            }
+        });
+        if (!shortages.isEmpty()) {
+            throw new InsufficientStockException(shortages);
+        }
+    }
+
+    /** Adds {@code quantity} to the product's entry, for {@link #checkNegativeStock}. */
+    public static void addRequired(Map<String, Integer> requiredByProduct, String productId, Integer quantity) {
+        if (productId != null && quantity != null) {
+            requiredByProduct.merge(productId, quantity, Integer::sum);
+        }
+    }
+
+    private static int currentQuantity(Product product) {
         ProductStock stock = product.getStock();
-        if (stock == null) {
-            throw new InsufficientStockException("Stock insuficiente para producto " + product.getName() + ". Disponible: 0, requerido: " + requiredQuantity);
-        }
-        Integer quantity = stock.getQuantity();
-        int availableQuantity = (quantity != null) ? quantity : 0;
-        if (availableQuantity < requiredQuantity) {
-            throw new InsufficientStockException("Stock insuficiente para producto " + product.getName() + ". Disponible: " + availableQuantity + ", requerido: " + requiredQuantity);
-        }
+        return stock != null && stock.getQuantity() != null ? stock.getQuantity() : 0;
     }
 
     /**
@@ -139,6 +168,23 @@ public class ProductService {
         return updateStock(productId, StockLog.StockLogType.IN, quantity, date, detail);
     }
 
+    /**
+     * Manual movement from the stock screen. An OUT that would leave the
+     * product below zero needs {@code allowNegativeStock}.
+     */
+    public Product updateStock(String id, StockLog.StockLogType type, Integer quantity, LocalDate date, String detail,
+            boolean allowNegativeStock) {
+        if (type == StockLog.StockLogType.OUT) {
+            checkNegativeStock(Map.of(id, quantity), allowNegativeStock);
+        }
+        return updateStock(id, type, quantity, date, detail);
+    }
+
+    /**
+     * Writes a movement. Stock is allowed to go below zero here: callers that
+     * take stock out decide beforehand, through {@link #checkNegativeStock},
+     * whether the user agreed to it.
+     */
     public Product updateStock(String id, StockLog.StockLogType type, Integer quantity, LocalDate date, String detail) {
         Product product = findById(id);
         ProductStock stock = product.getStock();
@@ -146,19 +192,16 @@ public class ProductService {
             stock = new ProductStock(0, 0.0);
             product.setStock(stock);
         }
+        int current = currentQuantity(product);
         // Update quantity based on movement type
         if (type == StockLog.StockLogType.IN) {
-            stock.setQuantity(stock.getQuantity() + quantity);
+            stock.setQuantity(current + quantity);
         } else if (type == StockLog.StockLogType.OUT) {
-            if (stock.getQuantity() < quantity) {
-                throw new InsufficientStockException("Stock insuficiente. Cantidad disponible: " + stock.getQuantity() + ", cantidad solicitada: " + quantity);
-            }
-            stock.setQuantity(stock.getQuantity() - quantity);
+            stock.setQuantity(current - quantity);
         }
-        // Update measure unit equivalent
-        if (stock.getQuantity() > 0) {
-            Double equivalent = stock.getQuantity() * product.getMeasurePerSaleUnit();
-            stock.setMeasureUnitEquivalent(equivalent);
+        // Update measure unit equivalent, negative along with the quantity
+        if (product.getMeasurePerSaleUnit() != null) {
+            stock.setMeasureUnitEquivalent(stock.getQuantity() * product.getMeasurePerSaleUnit());
         }
         productRepository.save(product);
         // Register the movement in the document based stock log

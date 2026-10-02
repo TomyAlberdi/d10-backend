@@ -82,13 +82,15 @@ public class ProductController {
     @PatchMapping("/{id}/stock")
     public ResponseEntity<?> updateStock(
             @PathVariable String id,
-            @RequestBody UpdateProductStockDTO stockUpdate) {
+            @RequestBody UpdateProductStockDTO stockUpdate,
+            @RequestParam(value = "allowNegativeStock", defaultValue = "false") boolean allowNegativeStock) {
         return ResponseEntity.ok(productService.updateStock(
                 id,
                 stockUpdate.getType(),
                 stockUpdate.getQuantity(),
                 stockUpdate.getDate(),
-                stockUpdate.getDetail()));
+                stockUpdate.getDetail(),
+                allowNegativeStock));
     }
 
     @PatchMapping("/update-price")

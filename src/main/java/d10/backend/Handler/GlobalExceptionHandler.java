@@ -1,5 +1,7 @@
 package d10.backend.Handler;
 
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,9 +34,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
 
+    /**
+     * Answered as JSON, unlike the other errors, so the frontend can list the
+     * products and retry with {@code allowNegativeStock=true} once confirmed.
+     */
     @ExceptionHandler(InsufficientStockException.class)
-    public ResponseEntity<String> handleInsufficientStock(InsufficientStockException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+    public ResponseEntity<Map<String, Object>> handleInsufficientStock(InsufficientStockException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "code", "NEGATIVE_STOCK",
+                "message", ex.getMessage(),
+                "shortages", ex.getShortages()));
     }
 
     public ResponseEntity<String> handleUnexpected(Exception ex) {

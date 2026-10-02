@@ -3,7 +3,9 @@ package d10.backend.Service;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -76,7 +78,7 @@ public class OrderService {
      * Receives the whole order, adding the sale units of every line to the stock
      * of its product, or sets it back to pending taking them out again.
      */
-    public OrderDTO updateReceived(String id, boolean received) {
+    public OrderDTO updateReceived(String id, boolean received, boolean allowNegativeStock) {
         Order order = findEntityById(id);
         if (isReceived(order) == received) {
             return OrderMapper.toDTO(order);
@@ -84,14 +86,17 @@ public class OrderService {
         List<OrderProduct> lines = linesWithQuantity(order);
         // There are no multi document transactions here, so everything that can
         // fail is checked up front: a deleted product, one whose stock data is
-        // incomplete, or not enough stock left to give back, aborts the order
-        // before any movement is written. Otherwise a failure halfway through
-        // would leave the order pending with part of its stock already moved.
+        // incomplete, or not enough stock left to give back (unless the user
+        // agreed to go negative), aborts the order before any movement is
+        // written. Otherwise a failure halfway through would leave the order
+        // pending with part of its stock already moved.
+        Map<String, Integer> required = new LinkedHashMap<>();
         for (OrderProduct line : lines) {
             productService.checkStockUpdatable(line.getProductId());
-            if (!received) {
-                productService.checkStockSufficient(line.getProductId(), line.getSaleUnitQuantity());
-            }
+            ProductService.addRequired(required, line.getProductId(), line.getSaleUnitQuantity());
+        }
+        if (!received) {
+            productService.checkNegativeStock(required, allowNegativeStock);
         }
         for (OrderProduct line : lines) {
             if (received) {

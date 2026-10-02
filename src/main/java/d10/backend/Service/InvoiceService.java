@@ -3,6 +3,7 @@ package d10.backend.Service;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,14 +67,12 @@ public class InvoiceService {
         return invoice;
     }
 
-    public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO) {
+    public Invoice createInvoice(CreateInvoiceDTO createInvoiceDTO, boolean allowNegativeStock) {
         Invoice invoice = InvoiceMapper.toEntity(createInvoiceDTO);
         invoice.setInvoiceNumber(generateNextInvoiceNumber());
         stampCostSnapshot(invoice);
         if (invoice.getStatus() == Invoice.Status.ENTREGADO || invoice.getStockDecreased().equals(true)) {
-            for (InvoiceProduct ip : invoice.getProducts()) {
-                productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
-            }
+            productService.checkNegativeStock(requiredStock(invoice.getProducts()), allowNegativeStock);
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
@@ -88,7 +87,7 @@ public class InvoiceService {
         return invoice;
     }
 
-    public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO) {
+    public Invoice updateInvoice(String id, CreateInvoiceDTO createInvoiceDTO, boolean allowNegativeStock) {
         Invoice invoice = findById(id);
         // The incoming lines come from the frontend and carry no cost
         // snapshot, so the stored ones are kept aside before the mapper
@@ -114,9 +113,7 @@ public class InvoiceService {
         }
         boolean shouldUpdateStock = !invoice.getStockDecreased() && ((createInvoiceDTO.getStockDecreased().equals(true)) || (createInvoiceDTO.getStatus() == Invoice.Status.ENTREGADO));
         if (shouldUpdateStock) {
-            for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
-                productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
-            }
+            productService.checkNegativeStock(requiredStock(createInvoiceDTO.getProducts()), allowNegativeStock);
             for (InvoiceProduct ip : createInvoiceDTO.getProducts()) {
                 productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
@@ -137,6 +134,17 @@ public class InvoiceService {
         applyDebtStatus(invoice);
         invoiceRepository.save(invoice);
         return invoice;
+    }
+
+    /** Sale units each product of the invoice takes out, lines of the same product summed. */
+    private static Map<String, Integer> requiredStock(List<InvoiceProduct> products) {
+        Map<String, Integer> required = new LinkedHashMap<>();
+        if (products != null) {
+            for (InvoiceProduct ip : products) {
+                ProductService.addRequired(required, ip.getId(), ip.getSaleUnitQuantity());
+            }
+        }
+        return required;
     }
 
     public void deleteInvoice(String id) {
@@ -191,15 +199,13 @@ public class InvoiceService {
         return invoiceRepository.findByProductId(productId);
     }
 
-    public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus) {
+    public Invoice updateInvoiceStatus(String id, Invoice.Status newStatus, boolean allowNegativeStock) {
         Invoice invoice = findById(id);
         boolean shouldUpdateStock = !invoice.getStockDecreased()
                 && (invoice.getStatus() == Invoice.Status.PENDIENTE || invoice.getStatus() == Invoice.Status.CANCELADO)
                 && (newStatus == Invoice.Status.ENTREGADO);
         if (shouldUpdateStock) {
-            for (InvoiceProduct ip : invoice.getProducts()) {
-                productService.checkStockSufficient(ip.getId(), ip.getSaleUnitQuantity());
-            }
+            productService.checkNegativeStock(requiredStock(invoice.getProducts()), allowNegativeStock);
             for (InvoiceProduct ip : invoice.getProducts()) {
                 productService.updateStockDecrease(ip.getId(), ip.getSaleUnitQuantity(), invoice.getDate(), saleStockDetail(invoice));
             }
