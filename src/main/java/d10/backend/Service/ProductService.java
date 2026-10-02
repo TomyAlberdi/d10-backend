@@ -18,6 +18,7 @@ import d10.backend.DTO.Product.StockShortageDTO;
 import d10.backend.Exception.InsufficientStockException;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.ProductMapper;
+import d10.backend.Model.PriceLog;
 import d10.backend.Model.Product;
 import d10.backend.Model.ProductStock;
 import d10.backend.Model.StockLog;
@@ -32,6 +33,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final ProductPaginationRepository productPaginationRepository;
     private final StockLogService stockLogService;
+    private final PriceLogService priceLogService;
 
     public Page<Product> getPaginatedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -74,14 +76,17 @@ public class ProductService {
     public Product createProduct(CreateProductDTO createProductDTO) {
         Product product = ProductMapper.toEntity(createProductDTO);
         productRepository.save(product);
+        priceLogService.registerChange(product, null, PriceLog.PriceLogSource.CREATED, null);
         return product;
     }
 
     public Product updateProduct(String id, CreateProductDTO createProductDTO) {
         Product product = findById(id);
+        PriceLog.PriceSnapshot previousPrices = PriceLog.PriceSnapshot.of(product);
         ProductMapper.setCommercialProductFields(product, createProductDTO);
         ProductMapper.updateFromDTO(product, createProductDTO);
         productRepository.save(product);
+        priceLogService.registerChange(product, previousPrices, PriceLog.PriceLogSource.EDITED, null);
         return product;
     }
 
@@ -228,8 +233,12 @@ public class ProductService {
             throw new ResourceNotFoundException("No se encontraron productos del proveedor " + providerName);
         }
 
+        String priceLogDetail = "Proveedor " + providerName + ": "
+                + (percentageChange >= 0 ? "+" : "")
+                + java.math.BigDecimal.valueOf(percentageChange).stripTrailingZeros().toPlainString().replace('.', ',') + "%";
         List<Product> updatedProducts = new ArrayList<>();
         for (Product product : products) {
+            PriceLog.PriceSnapshot previousPrices = PriceLog.PriceSnapshot.of(product);
             Double currentCost = product.getCostByMeasureUnit();
             Double profitPercentage = product.getProfit();
             
@@ -266,6 +275,8 @@ public class ProductService {
             
             // Save the updated product
             productRepository.save(product);
+            priceLogService.registerChange(product, previousPrices,
+                    PriceLog.PriceLogSource.PROVIDER_UPDATE, priceLogDetail);
             updatedProducts.add(product);
         }
         
