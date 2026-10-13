@@ -35,10 +35,11 @@ public class ProductController {
 
     @GetMapping("/discontinued")
     public ResponseEntity<?> listDiscontinued(
+            @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "30") int size
     ) {
-        return ResponseEntity.ok(productService.getDiscontinuedProducts(page, size));
+        return ResponseEntity.ok(productService.getDiscontinuedProducts(query, page, size));
     }
 
     @GetMapping("/{id}")
