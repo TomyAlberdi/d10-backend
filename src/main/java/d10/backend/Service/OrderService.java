@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import d10.backend.DTO.Order.CreateOrderDTO;
 import d10.backend.DTO.Order.CreateOrderProductDTO;
 import d10.backend.DTO.Order.OrderDTO;
+import d10.backend.DTO.Order.RestockProductDTO;
 import d10.backend.Exception.ResourceNotFoundException;
 import d10.backend.Mapper.OrderMapper;
 import d10.backend.Model.Order;
@@ -48,6 +49,35 @@ public class OrderService {
 
     public OrderDTO findById(String id) {
         return OrderMapper.toDTO(findEntityById(id));
+    }
+
+    /**
+     * Every active product that ran out of stock, along with how much of it is
+     * already waiting in pending orders.
+     */
+    public List<RestockProductDTO> findRestockProducts() {
+        Map<String, Integer> pendingByProduct = new LinkedHashMap<>();
+        for (Order order : orderRepository.findAll()) {
+            if (isReceived(order)) {
+                continue;
+            }
+            for (OrderProduct line : linesWithQuantity(order)) {
+                ProductService.addRequired(pendingByProduct, line.getProductId(), line.getSaleUnitQuantity());
+            }
+        }
+        List<RestockProductDTO> products = new ArrayList<>();
+        for (Product product : productService.getOutOfStockProducts()) {
+            Integer stock = product.getStock() != null ? product.getStock().getQuantity() : null;
+            products.add(new RestockProductDTO(
+                    product.getId(),
+                    product.getCode(),
+                    product.getName(),
+                    product.getProviderName(),
+                    product.getSaleUnitType(),
+                    stock != null ? stock : 0,
+                    pendingByProduct.getOrDefault(product.getId(), 0)));
+        }
+        return products;
     }
 
     public OrderDTO createOrder(CreateOrderDTO createOrderDTO) {
@@ -111,6 +141,29 @@ public class OrderService {
         return OrderMapper.toDTO(orderRepository.save(order));
     }
 
+    /**
+     * Appends lines to a pending order, leaving the ones it already has (and
+     * their snapshots) untouched. A product already in the order is rejected
+     * rather than merged, so no amount changes behind the user's back.
+     */
+    public OrderDTO addProducts(String id, List<CreateOrderProductDTO> items) {
+        Order order = findEntityById(id);
+        if (isReceived(order)) {
+            throw new IllegalStateException(
+                    "El pedido ya fue recibido. Marcalo como pendiente antes de agregarle productos.");
+        }
+        List<OrderProduct> products = order.getProducts() != null
+                ? new ArrayList<>(order.getProducts())
+                : new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (OrderProduct line : products) {
+            seen.add(line.getProductId());
+        }
+        products.addAll(resolveProducts(items, seen));
+        order.setProducts(products);
+        return OrderMapper.toDTO(orderRepository.save(order));
+    }
+
     public void deleteOrder(String id) {
         Order order = findEntityById(id);
         if (isReceived(order)) {
@@ -134,11 +187,14 @@ public class OrderService {
      * line against the stock on its own.
      */
     private List<OrderProduct> resolveProducts(CreateOrderDTO createOrderDTO) {
-        List<CreateOrderProductDTO> items = createOrderDTO.getProducts();
+        return resolveProducts(createOrderDTO.getProducts(), new HashSet<>());
+    }
+
+    /** Same as above, also rejecting the products in {@code seen} (the lines an order already has). */
+    private List<OrderProduct> resolveProducts(List<CreateOrderProductDTO> items, Set<String> seen) {
         if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("El pedido debe tener al menos un producto.");
         }
-        Set<String> seen = new HashSet<>();
         List<OrderProduct> products = new ArrayList<>();
         for (CreateOrderProductDTO item : items) {
             if (item.getProductId() == null || item.getProductId().trim().isEmpty()) {

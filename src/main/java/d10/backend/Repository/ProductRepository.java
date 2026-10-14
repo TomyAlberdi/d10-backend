@@ -13,6 +13,14 @@ public interface ProductRepository extends MongoRepository<Product, String> {
     List<Product> findByCode(String code);
     List<Product> findByName(String name);
     List<Product> findByStockQuantityGreaterThan(Integer quantity);
+
+    /**
+     * Active products that have run out: zero or negative stock, or no stock
+     * data at all (a null also matches a missing field).
+     */
+    @Query(value = "{ 'discontinued': { $ne: true }, $or: [ { 'stock.quantity': { $lte: 0 } }, { 'stock.quantity': null } ] }",
+            sort = "{ 'providerName': 1, 'name': 1 }")
+    List<Product> findOutOfStock();
     List<Product> findByProviderName(String providerName);
 
     /** Used by the category ranking to resolve the products of a category in one query. */

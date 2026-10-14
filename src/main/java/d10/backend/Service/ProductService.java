@@ -57,6 +57,11 @@ public class ProductService {
         return productRepository.findByStockQuantityGreaterThan(0);
     }
 
+    /** Active products with zero, negative or missing stock, by provider and name. */
+    public List<Product> getOutOfStockProducts() {
+        return productRepository.findOutOfStock();
+    }
+
     public Product findById(String id) {
         Optional<Product> productSearch = productRepository.findById(id);
         if (productSearch.isEmpty()) {
