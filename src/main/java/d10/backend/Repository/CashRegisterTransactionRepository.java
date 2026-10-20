@@ -34,6 +34,8 @@ public interface CashRegisterTransactionRepository extends MongoRepository<CashR
 
     Page<CashRegisterTransaction> findByDateTimeBetweenAndTypeOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end, CashRegisterTransaction.TransactionType type, Pageable pageable);
 
+    List<CashRegisterTransaction> findByInvoiceIdOrderByDateTimeAsc(String invoiceId);
+
     Page<CashRegisterTransaction> findByDateTimeBetweenAndRegisterTypeAndTypeOrderByDateTimeAsc(LocalDateTime start, LocalDateTime end, CashRegister.CashRegisterType registerType, CashRegisterTransaction.TransactionType type, Pageable pageable);
 
 }

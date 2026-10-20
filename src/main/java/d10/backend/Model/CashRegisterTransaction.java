@@ -29,6 +29,11 @@ public class CashRegisterTransaction {
 
     private CashRegister.CashRegisterType registerType;
 
+    // The sale this transaction collects or refunds, null for manual movements
+    private String invoiceId;
+
+    private String invoiceNumber;
+
     public enum TransactionType {
         IN, OUT
     }
