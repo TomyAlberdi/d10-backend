@@ -35,4 +35,18 @@ public interface ProductPaginationRepository extends MongoRepository<Product, St
     )
     Page<Product> findDiscontinuedProducts(Pageable pageable);
 
+    @Query(
+            value = "{ '$and': [ "
+            + "{ 'discontinued': true }, "
+            + "{ '$or': [ "
+            + "{ 'name': { $regex: ?0, $options: 'i' } }, "
+            + "{ 'code': { $regex: ?0, $options: 'i' } }, "
+            + "{ 'description': { $regex: ?0, $options: 'i' } }, "
+            + "{ 'providerName': { $regex: ?0, $options: 'i' } } "
+            + "] } "
+            + "] }",
+            sort = "{ 'providerName': 1, 'name': 1 }"
+    )
+    Page<Product> findDiscontinuedBySearchQuery(String query, Pageable pageable);
+
 }

@@ -24,7 +24,7 @@ public interface InvoiceRepository extends MongoRepository<Invoice, String> {
 
 	List<Invoice> findByStockDecreasedFalseOrderByDateDescInvoiceNumberDesc();
 
-	@Query("{ 'products.id': ?0 }")
+	@Query(value = "{ 'products.id': ?0 }", sort = "{ 'date': -1, 'invoiceNumber': -1 }")
 	List<Invoice> findByProductId(String productId);
 
 	@Query("{ 'date': { $gte: ?0, $lt: ?1 }, 'status': { $in: ?2 } }")

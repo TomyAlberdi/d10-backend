@@ -44,13 +44,22 @@ public class ProductService {
         }
     }
 
-    public Page<Product> getDiscontinuedProducts(int page, int size) {
+    public Page<Product> getDiscontinuedProducts(String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        return productPaginationRepository.findDiscontinuedProducts(pageable);
+        if (query != null && !query.trim().isEmpty()) {
+            return productPaginationRepository.findDiscontinuedBySearchQuery(query, pageable);
+        } else {
+            return productPaginationRepository.findDiscontinuedProducts(pageable);
+        }
     }
 
     public List<Product> getProductsWithStockGreaterThanZero() {
         return productRepository.findByStockQuantityGreaterThan(0);
+    }
+
+    /** Active products with zero, negative or missing stock, by provider and name. */
+    public List<Product> getOutOfStockProducts() {
+        return productRepository.findOutOfStock();
     }
 
     public Product findById(String id) {

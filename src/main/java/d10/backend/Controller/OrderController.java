@@ -1,5 +1,7 @@
 package d10.backend.Controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.Order.CreateOrderDTO;
+import d10.backend.DTO.Order.CreateOrderProductDTO;
 import d10.backend.Service.OrderService;
 import lombok.RequiredArgsConstructor;
 
@@ -29,6 +32,12 @@ public class OrderController {
         return ResponseEntity.ok(orderService.findAll());
     }
 
+    /** Active products with zero, negative or no stock, to be ordered again. */
+    @GetMapping("/restock")
+    public ResponseEntity<?> listRestock() {
+        return ResponseEntity.ok(orderService.findRestockProducts());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable String id) {
         return ResponseEntity.ok(orderService.findById(id));
@@ -42,6 +51,12 @@ public class OrderController {
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable String id, @RequestBody CreateOrderDTO createOrderDTO) {
         return ResponseEntity.ok(orderService.updateOrder(id, createOrderDTO));
+    }
+
+    /** Appends products to a pending order without touching its current lines. */
+    @PostMapping("/{id}/products")
+    public ResponseEntity<?> addProducts(@PathVariable String id, @RequestBody List<CreateOrderProductDTO> products) {
+        return ResponseEntity.ok(orderService.addProducts(id, products));
     }
 
     /**
