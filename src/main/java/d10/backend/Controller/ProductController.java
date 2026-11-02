@@ -3,6 +3,7 @@ package d10.backend.Controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import d10.backend.DTO.Product.CreateProductDTO;
+import d10.backend.DTO.Product.ProductFilterDTO;
 import d10.backend.DTO.Product.UpdateProductStockDTO;
 import d10.backend.Service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +30,10 @@ public class ProductController {
     public ResponseEntity<?> list(
             @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "30") int size
+            @RequestParam(value = "size", defaultValue = "30") int size,
+            @ModelAttribute ProductFilterDTO filters
     ) {
-        return ResponseEntity.ok(productService.getPaginatedProducts(query, page, size));
+        return ResponseEntity.ok(productService.getPaginatedProducts(query, page, size, filters));
     }
 
     @GetMapping("/discontinued")
@@ -55,6 +58,11 @@ public class ProductController {
     @GetMapping("/providers")
     public ResponseEntity<?> getProviders() {
         return ResponseEntity.ok(productService.getDistinctProviders());
+    }
+
+    @GetMapping("/dimensions")
+    public ResponseEntity<?> getDimensions() {
+        return ResponseEntity.ok(productService.getDistinctDimensions());
     }
 
     @PostMapping
