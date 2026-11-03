@@ -7,13 +7,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Service;
 
 import d10.backend.DTO.Product.CreateProductDTO;
+import d10.backend.DTO.Product.ProductFilterDTO;
 import d10.backend.DTO.Product.StockShortageDTO;
 import d10.backend.Exception.InsufficientStockException;
 import d10.backend.Exception.ResourceNotFoundException;
@@ -34,14 +41,82 @@ public class ProductService {
     private final ProductPaginationRepository productPaginationRepository;
     private final StockLogService stockLogService;
     private final PriceLogService priceLogService;
+    private final MongoTemplate mongoTemplate;
 
-    public Page<Product> getPaginatedProducts(String query, int page, int size) {
+    public Page<Product> getPaginatedProducts(String query, int page, int size, ProductFilterDTO filters) {
         Pageable pageable = PageRequest.of(page, size);
+        if (filters != null && hasFilters(filters)) {
+            return findFilteredProducts(query, filters, pageable);
+        }
         if (query != null && !query.trim().isEmpty()) {
             return productPaginationRepository.findBySearchQuery(query, pageable);
         } else {
             return productPaginationRepository.findAll(pageable);
         }
+    }
+
+    private static boolean hasFilters(ProductFilterDTO filters) {
+        return !isBlank(filters.getDimensions())
+                || !isBlank(filters.getProviderName())
+                || !isBlank(filters.getCategory())
+                || !isBlank(filters.getSubcategory())
+                || filters.getMinPrice() != null
+                || filters.getMaxPrice() != null;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    /** Case insensitive exact match, so a filter value is never read as a regex. */
+    private static Criteria equalsIgnoreCase(String field, String value) {
+        return Criteria.where(field).regex("^" + Pattern.quote(value.trim()) + "$", "i");
+    }
+
+    /**
+     * Active products matching the search query (same fields as
+     * findBySearchQuery) and every advanced filter that is set, sorted like the
+     * unfiltered list.
+     */
+    private Page<Product> findFilteredProducts(String query, ProductFilterDTO filters, Pageable pageable) {
+        List<Criteria> criteria = new ArrayList<>();
+        criteria.add(Criteria.where("discontinued").is(false));
+        if (!isBlank(query)) {
+            criteria.add(new Criteria().orOperator(
+                    Criteria.where("name").regex(query, "i"),
+                    Criteria.where("code").regex(query, "i"),
+                    Criteria.where("description").regex(query, "i"),
+                    Criteria.where("providerName").regex(query, "i")));
+        }
+        if (!isBlank(filters.getDimensions())) {
+            criteria.add(equalsIgnoreCase("dimensions", filters.getDimensions()));
+        }
+        if (!isBlank(filters.getProviderName())) {
+            criteria.add(equalsIgnoreCase("providerName", filters.getProviderName()));
+        }
+        if (!isBlank(filters.getCategory())) {
+            criteria.add(equalsIgnoreCase("category", filters.getCategory()));
+        }
+        if (!isBlank(filters.getSubcategory())) {
+            criteria.add(equalsIgnoreCase("subcategory", filters.getSubcategory()));
+        }
+        if (filters.getMinPrice() != null || filters.getMaxPrice() != null) {
+            Criteria price = Criteria.where("priceBySaleUnit");
+            if (filters.getMinPrice() != null) {
+                price = price.gte(filters.getMinPrice());
+            }
+            if (filters.getMaxPrice() != null) {
+                price = price.lte(filters.getMaxPrice());
+            }
+            criteria.add(price);
+        }
+
+        Query mongoQuery = new Query(new Criteria().andOperator(criteria))
+                .with(Sort.by(Sort.Order.asc("providerName"), Sort.Order.asc("name")))
+                .with(pageable);
+        List<Product> content = mongoTemplate.find(mongoQuery, Product.class);
+        return PageableExecutionUtils.getPage(content, pageable,
+                () -> mongoTemplate.count(Query.of(mongoQuery).limit(-1).skip(-1), Product.class));
     }
 
     public Page<Product> getDiscontinuedProducts(String query, int page, int size) {
@@ -234,6 +309,19 @@ public class ProductService {
         }
         providers.sort(String::compareTo);
         return providers;
+    }
+
+    /** Distinct dimensions of the active products, sorted. */
+    public List<String> getDistinctDimensions() {
+        List<String> dimensions = new ArrayList<>();
+        for (String value : mongoTemplate.findDistinct(
+                new Query(Criteria.where("discontinued").is(false)), "dimensions", Product.class, String.class)) {
+            if (value != null && !value.trim().isEmpty() && !dimensions.contains(value.trim())) {
+                dimensions.add(value.trim());
+            }
+        }
+        dimensions.sort(String::compareTo);
+        return dimensions;
     }
 
     public List<Product> updateCostsByProvider(String providerName, Double percentageChange) {
